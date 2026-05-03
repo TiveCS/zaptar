@@ -1,0 +1,50 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+import type {
+  Connection,
+  ConnectionDraft,
+  ConnectionTestResult,
+  MigrationScript,
+  SchemaDiff
+} from '../shared/types'
+
+const zaptar = {
+  connection: {
+    list: (): Promise<Connection[]> => ipcRenderer.invoke('connection:list'),
+    create: (draft: ConnectionDraft): Promise<Connection> =>
+      ipcRenderer.invoke('connection:create', draft),
+    update: (id: string, patch: Partial<ConnectionDraft>): Promise<Connection> =>
+      ipcRenderer.invoke('connection:update', { id, patch }),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('connection:delete', { id }),
+    test: (id: string): Promise<ConnectionTestResult> =>
+      ipcRenderer.invoke('connection:test', { id })
+  },
+  compare: {
+    listTables: (id: string): Promise<{ tables: string[] }> =>
+      ipcRenderer.invoke('compare:list-tables', { id }),
+    run: (
+      sourceId: string,
+      targetId: string,
+      tables?: string[]
+    ): Promise<{ diff: SchemaDiff; script: MigrationScript }> =>
+      ipcRenderer.invoke('compare:run', { sourceId, targetId, tables })
+  },
+  script: {
+    save: (script: MigrationScript): Promise<{ path: string | null }> =>
+      ipcRenderer.invoke('script:save', { script }),
+    copy: (script: MigrationScript): Promise<void> => ipcRenderer.invoke('script:copy', { script })
+  }
+} as const
+
+if (process.contextIsolated) {
+  try {
+    contextBridge.exposeInMainWorld('zaptar', zaptar)
+  } catch (error) {
+    console.error(error)
+  }
+} else {
+  // @ts-ignore window typing handled in index.d.ts
+  window.zaptar = zaptar
+}
+
+export type ZaptarBridge = typeof zaptar
