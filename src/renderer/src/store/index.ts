@@ -1,55 +1,120 @@
 import { create } from 'zustand'
 
-import type { Connection, MigrationScript, SchemaDiff } from '@shared/types'
+import type {
+  Connection,
+  ConnectionDraft,
+  ConnectionTestResult,
+  MigrationScript,
+  SchemaDiff
+} from '@shared/types'
+import { api } from '@renderer/lib/api'
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 
-type ConnectionsSlice = {
+type AppStore = {
+  // ── connections ──────────────────────────────────────────────────────
   connections: Connection[]
-  loadingConnections: boolean
-}
+  connectionsLoaded: boolean
+  loadConnections: () => Promise<void>
+  createConnection: (draft: ConnectionDraft) => Promise<void>
+  updateConnection: (id: string, patch: Partial<ConnectionDraft>) => Promise<void>
+  deleteConnection: (id: string) => Promise<void>
+  testConnection: (id: string) => Promise<ConnectionTestResult>
 
-type ComparisonSlice = {
+  // ── comparison ───────────────────────────────────────────────────────
   sourceId: string | null
   targetId: string | null
   selectedTables: Set<string>
-  status: Status
+  compareStatus: Status
   diff: SchemaDiff | null
   script: MigrationScript | null
-  error: string | null
-}
+  compareError: string | null
+  setSourceId: (id: string | null) => void
+  setTargetId: (id: string | null) => void
+  toggleTable: (name: string) => void
+  resetTables: () => void
+  runCompare: () => Promise<void>
 
-type UiSlice = {
+  // ── ui ───────────────────────────────────────────────────────────────
   selectedTable: string | null
   activeSection: 'columns' | 'indexes' | 'fks' | 'checks' | 'options'
   showUnchanged: boolean
   diffFilter: string
   setSelectedTable: (name: string | null) => void
-  setActiveSection: (section: UiSlice['activeSection']) => void
-  setShowUnchanged: (show: boolean) => void
-  setDiffFilter: (filter: string) => void
+  setActiveSection: (s: AppStore['activeSection']) => void
+  setShowUnchanged: (v: boolean) => void
+  setDiffFilter: (v: string) => void
 }
 
-export type AppStore = ConnectionsSlice & ComparisonSlice & UiSlice
-
-export const useStore = create<AppStore>((set) => ({
+export const useStore = create<AppStore>((set, get) => ({
+  // ── connections ──────────────────────────────────────────────────────
   connections: [],
-  loadingConnections: false,
+  connectionsLoaded: false,
 
+  loadConnections: async () => {
+    const connections = await api.connection.list()
+    set({ connections, connectionsLoaded: true })
+  },
+
+  createConnection: async (draft) => {
+    const conn = await api.connection.create(draft)
+    set((s) => ({ connections: [...s.connections, conn] }))
+  },
+
+  updateConnection: async (id, patch) => {
+    const conn = await api.connection.update(id, patch)
+    set((s) => ({ connections: s.connections.map((c) => (c.id === id ? conn : c)) }))
+  },
+
+  deleteConnection: async (id) => {
+    await api.connection.delete(id)
+    set((s) => ({ connections: s.connections.filter((c) => c.id !== id) }))
+  },
+
+  testConnection: (id) => api.connection.test(id),
+
+  // ── comparison ───────────────────────────────────────────────────────
   sourceId: null,
   targetId: null,
   selectedTables: new Set(),
-  status: 'idle',
+  compareStatus: 'idle',
   diff: null,
   script: null,
-  error: null,
+  compareError: null,
 
+  setSourceId: (id) => set({ sourceId: id }),
+  setTargetId: (id) => set({ targetId: id }),
+  toggleTable: (name) =>
+    set((s) => {
+      const next = new Set(s.selectedTables)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return { selectedTables: next }
+    }),
+  resetTables: () => set({ selectedTables: new Set() }),
+
+  runCompare: async () => {
+    const { sourceId, targetId, selectedTables } = get()
+    if (!sourceId || !targetId) return
+    set({ compareStatus: 'loading', diff: null, script: null, compareError: null })
+    try {
+      const tables = selectedTables.size > 0 ? [...selectedTables] : undefined
+      const result = await api.compare.run(sourceId, targetId, tables)
+      set({ compareStatus: 'success', diff: result.diff, script: result.script })
+    } catch (err) {
+      set({
+        compareStatus: 'error',
+        compareError: err instanceof Error ? err.message : String(err)
+      })
+    }
+  },
+
+  // ── ui ───────────────────────────────────────────────────────────────
   selectedTable: null,
   activeSection: 'columns',
   showUnchanged: false,
   diffFilter: '',
   setSelectedTable: (name) => set({ selectedTable: name }),
-  setActiveSection: (section) => set({ activeSection: section }),
-  setShowUnchanged: (show) => set({ showUnchanged: show }),
-  setDiffFilter: (filter) => set({ diffFilter: filter })
+  setActiveSection: (s) => set({ activeSection: s }),
+  setShowUnchanged: (v) => set({ showUnchanged: v }),
+  setDiffFilter: (v) => set({ diffFilter: v })
 }))
