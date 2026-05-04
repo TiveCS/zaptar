@@ -259,89 +259,91 @@ export function ComparePage(): React.JSX.Element {
   const canRun = !!sourceId && !!targetId && sourceId !== targetId && compareStatus !== 'loading'
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Compare schemas</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Pick the newer database (source) and the older database (target). The migration script
-          will bring target up to source.
-        </p>
-      </div>
-
-      {/* Connection pickers */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-        <ConnectionPicker
-          label="Source"
-          sublabel="The newer schema"
-          value={sourceId}
-          onChange={(id) => {
-            setSourceId(id)
-          }}
-          excludeId={targetId}
-        />
-
-        <div className="mt-8 flex items-center justify-center">
-          <ArrowRight className="size-5 text-[var(--color-muted-foreground)]" />
+    <div className="h-full overflow-auto">
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Compare schemas</h1>
+          <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
+            Pick the newer database (source) and the older database (target). The migration script
+            will bring target up to source.
+          </p>
         </div>
 
-        <ConnectionPicker
-          label="Target"
-          sublabel="Will receive the migration"
-          value={targetId}
-          onChange={setTargetId}
-          excludeId={sourceId}
-        />
-      </div>
+        {/* Connection pickers */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
+          <ConnectionPicker
+            label="Source"
+            sublabel="The newer schema"
+            value={sourceId}
+            onChange={(id) => {
+              setSourceId(id)
+            }}
+            excludeId={targetId}
+          />
 
-      {/* Same-connection warning */}
-      {sourceId && targetId && sourceId === targetId && (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-[var(--color-destructive)]">
-          <AlertCircle className="size-3.5" />
-          Source and target must be different connections.
-        </p>
-      )}
+          <div className="mt-8 flex items-center justify-center">
+            <ArrowRight className="size-5 text-[var(--color-muted-foreground)]" />
+          </div>
 
-      {/* Table selection */}
-      {sourceId && sourceId !== targetId && (
-        <div className="mt-6">
-          <TableCheckboxList
-            state={tableState}
-            selected={selectedTables}
-            onToggle={toggleTable}
-            onSelectAll={(names) => useStore.setState({ selectedTables: new Set(names) })}
-            onClearAll={resetTables}
+          <ConnectionPicker
+            label="Target"
+            sublabel="Will receive the migration"
+            value={targetId}
+            onChange={setTargetId}
+            excludeId={sourceId}
           />
         </div>
-      )}
 
-      {/* Compare error */}
-      {compareStatus === 'error' && compareError && (
-        <div className="mt-4 flex gap-2 rounded-lg border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/8 px-4 py-3">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-[var(--color-destructive)]" />
-          <div>
-            <p className="text-xs font-medium text-[var(--color-destructive)]">Compare failed</p>
-            <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-xs text-[var(--color-destructive)]/80">
-              {compareError}
-            </pre>
+        {/* Same-connection warning */}
+        {sourceId && targetId && sourceId === targetId && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-[var(--color-destructive)]">
+            <AlertCircle className="size-3.5" />
+            Source and target must be different connections.
+          </p>
+        )}
+
+        {/* Table selection */}
+        {sourceId && sourceId !== targetId && (
+          <div className="mt-6">
+            <TableCheckboxList
+              state={tableState}
+              selected={selectedTables}
+              onToggle={toggleTable}
+              onSelectAll={(names) => useStore.setState({ selectedTables: new Set(names) })}
+              onClearAll={resetTables}
+            />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Run button */}
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleRunCompare} disabled={!canRun}>
-          {compareStatus === 'loading' ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Comparing…
-            </>
-          ) : (
-            <>
-              <Play className="size-4" />
-              Run compare
-            </>
-          )}
-        </Button>
+        {/* Compare error */}
+        {compareStatus === 'error' && compareError && (
+          <div className="mt-4 flex gap-2 rounded-lg border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/8 px-4 py-3">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-[var(--color-destructive)]" />
+            <div>
+              <p className="text-xs font-medium text-[var(--color-destructive)]">Compare failed</p>
+              <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-xs text-[var(--color-destructive)]/80">
+                {compareError}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Run button */}
+        <div className="mt-6 flex justify-end">
+          <Button onClick={handleRunCompare} disabled={!canRun}>
+            {compareStatus === 'loading' ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Comparing…
+              </>
+            ) : (
+              <>
+                <Play className="size-4" />
+                Run compare
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )

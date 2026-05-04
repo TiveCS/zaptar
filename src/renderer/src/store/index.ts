@@ -95,11 +95,27 @@ export const useStore = create<AppStore>((set, get) => ({
   runCompare: async () => {
     const { sourceId, targetId, selectedTables } = get()
     if (!sourceId || !targetId) return
-    set({ compareStatus: 'loading', diff: null, script: null, compareError: null })
+    // Clear previous result and selection before starting
+    set({
+      compareStatus: 'loading',
+      diff: null,
+      script: null,
+      compareError: null,
+      selectedTable: null
+    })
     try {
       const tables = selectedTables.size > 0 ? [...selectedTables] : undefined
       const result = await api.compare.run(sourceId, targetId, tables)
-      set({ compareStatus: 'success', diff: result.diff, script: result.script })
+      // Auto-select the first changed table so the result page is immediately useful
+      const d = result.diff
+      const firstChanged =
+        d.modifiedTables[0]?.name ?? d.addedTables[0]?.name ?? d.removedTables[0]?.name ?? null
+      set({
+        compareStatus: 'success',
+        diff: d,
+        script: result.script,
+        selectedTable: firstChanged
+      })
     } catch (err) {
       set({
         compareStatus: 'error',

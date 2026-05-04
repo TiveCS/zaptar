@@ -56,65 +56,67 @@ export function ConnectionsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
-          <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-            Saved MySQL / MariaDB databases. Passwords are encrypted by the OS keychain.
-          </p>
-        </div>
-        <Button onClick={handleAdd}>
-          <Plus />
-          Add connection
-        </Button>
-      </div>
-
-      {/* List */}
-      <div className="mt-8 flex flex-col gap-3">
-        {!connectionsLoaded && (
-          <p className="text-sm text-[var(--color-muted-foreground)]">Loading…</p>
-        )}
-
-        {connectionsLoaded && connections.length === 0 && (
-          <div className="rounded-lg border border-dashed border-[var(--color-border)] p-12 text-center">
-            <p className="text-sm text-[var(--color-muted-foreground)]">
-              No connections yet. Click{' '}
-              <button
-                onClick={handleAdd}
-                className="font-medium text-[var(--color-foreground)] underline underline-offset-2"
-              >
-                Add connection
-              </button>{' '}
-              to save your first one.
+    <div className="h-full overflow-auto">
+      <div className="mx-auto max-w-4xl px-6 py-8">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
+            <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
+              Saved MySQL / MariaDB databases. Passwords are encrypted by the OS keychain.
             </p>
           </div>
-        )}
+          <Button onClick={handleAdd}>
+            <Plus />
+            Add connection
+          </Button>
+        </div>
 
-        {connections.map((conn) => (
-          <div key={conn.id} className="relative">
-            {deleteConfirm === conn.id && (
-              <div className="absolute -top-2 right-0 z-10 rounded-md border border-[var(--color-destructive)] bg-[var(--color-card)] px-3 py-1.5 text-xs text-[var(--color-destructive)] shadow-md">
-                Click delete again to confirm — this cannot be undone
-              </div>
-            )}
-            <ConnectionCard
-              connection={conn}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onTest={testConnection}
-            />
-          </div>
-        ))}
+        {/* List */}
+        <div className="mt-8 flex flex-col gap-3">
+          {!connectionsLoaded && (
+            <p className="text-sm text-[var(--color-muted-foreground)]">Loading…</p>
+          )}
+
+          {connectionsLoaded && connections.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[var(--color-border)] p-12 text-center">
+              <p className="text-sm text-[var(--color-muted-foreground)]">
+                No connections yet. Click{' '}
+                <button
+                  onClick={handleAdd}
+                  className="font-medium text-[var(--color-foreground)] underline underline-offset-2"
+                >
+                  Add connection
+                </button>{' '}
+                to save your first one.
+              </p>
+            </div>
+          )}
+
+          {connections.map((conn) => (
+            <div key={conn.id} className="relative">
+              {deleteConfirm === conn.id && (
+                <div className="absolute -top-2 right-0 z-10 rounded-md border border-[var(--color-destructive)] bg-[var(--color-card)] px-3 py-1.5 text-xs text-[var(--color-destructive)] shadow-md">
+                  Click delete again to confirm — this cannot be undone
+                </div>
+              )}
+              <ConnectionCard
+                connection={conn}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onTest={testConnection}
+              />
+            </div>
+          ))}
+        </div>
+
+        <ConnectionForm
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          editing={editing}
+          onSave={handleSave}
+        />
       </div>
-
-      <ConnectionForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        editing={editing}
-        onSave={handleSave}
-      />
     </div>
   )
 }

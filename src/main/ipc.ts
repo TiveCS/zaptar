@@ -2,8 +2,10 @@ import { clipboard, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { IpcChannel, IpcChannelMap } from '../shared/types'
+import { emitSql } from './providers/mysql/emit-sql'
 import { testMysqlConnection } from './providers/mysql/connection'
-import { listTables } from './providers/mysql/introspect'
+import { introspectSchema, listTables } from './providers/mysql/introspect'
+import { diff } from '../shared/diff/engine'
 import { decryptPassword, encryptPassword } from './secrets'
 import { getDb } from './store'
 
@@ -83,8 +85,26 @@ export function registerIpc(): void {
   })
 
   // ── compare:run ────────────────────────────────────────────────────────
-  handle('compare:run', () => {
-    throw new Error('compare:run not implemented yet (Milestone 3-4)')
+  handle('compare:run', async ({ sourceId, targetId, tables }) => {
+    const db = getDb()
+    const srcStored = db.data.connections.find((c) => c.id === sourceId)
+    const tgtStored = db.data.connections.find((c) => c.id === targetId)
+    if (!srcStored) throw new Error(`Connection not found: ${sourceId}`)
+    if (!tgtStored) throw new Error(`Connection not found: ${targetId}`)
+
+    const srcPw = decryptPassword(srcStored._encryptedPassword)
+    const tgtPw = decryptPassword(tgtStored._encryptedPassword)
+    const { _encryptedPassword: _a, ...srcConn } = srcStored
+    const { _encryptedPassword: _b, ...tgtConn } = tgtStored
+
+    const [sourceSchema, targetSchema] = await Promise.all([
+      introspectSchema(srcConn, srcPw, tables),
+      introspectSchema(tgtConn, tgtPw, tables)
+    ])
+
+    const schemaDiff = diff(sourceSchema, targetSchema)
+    const script = emitSql(schemaDiff)
+    return { diff: schemaDiff, script }
   })
 
   // ── script:save ────────────────────────────────────────────────────────
