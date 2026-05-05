@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, Loader2, Play, Search } from 'lucide-react'
+import { AlertCircle, ArrowLeftRight, ChevronDown, ChevronUp, Loader2, Play, Search } from 'lucide-react'
 import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -302,7 +302,18 @@ export function ComparePage(): React.JSX.Element {
             excludeId={targetId}
           />
           <div className="mt-8 flex items-center justify-center">
-            <ArrowRight className="size-5 text-[var(--color-muted-foreground)]" />
+            <button
+              onClick={() => {
+                const tmp = sourceId
+                setSourceId(targetId)
+                setTargetId(tmp)
+              }}
+              disabled={!sourceId || !targetId}
+              title="Swap source and target"
+              className="rounded-md p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ArrowLeftRight className="size-5" />
+            </button>
           </div>
           <ConnectionPicker
             label="Target"

@@ -20,6 +20,7 @@ export function ConnectionsPage(): React.JSX.Element {
 
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Connection | undefined>()
+  const [duplicateFrom, setDuplicateFrom] = React.useState<Connection | undefined>()
   const [deleteConfirm, setDeleteConfirm] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -28,17 +29,29 @@ export function ConnectionsPage(): React.JSX.Element {
 
   function handleAdd(): void {
     setEditing(undefined)
+    setDuplicateFrom(undefined)
     setFormOpen(true)
   }
 
   function handleEdit(conn: Connection): void {
     setEditing(conn)
+    setDuplicateFrom(undefined)
+    setFormOpen(true)
+  }
+
+  function handleDuplicate(conn: Connection): void {
+    setEditing(undefined)
+    setDuplicateFrom(conn)
     setFormOpen(true)
   }
 
   async function handleSave(draft: ConnectionDraft): Promise<void> {
     if (editing) {
-      await updateConnection(editing.id, draft)
+      // Blank password = keep existing; strip it from the patch entirely
+      const { password, ...rest } = draft
+      const patch: Partial<ConnectionDraft> = { ...rest }
+      if (password) patch.password = password
+      await updateConnection(editing.id, patch)
     } else {
       await createConnection(draft)
     }
@@ -103,6 +116,7 @@ export function ConnectionsPage(): React.JSX.Element {
               <ConnectionCard
                 connection={conn}
                 onEdit={handleEdit}
+                onDuplicate={handleDuplicate}
                 onDelete={handleDelete}
                 onTest={testConnection}
               />
@@ -114,6 +128,7 @@ export function ConnectionsPage(): React.JSX.Element {
           open={formOpen}
           onOpenChange={setFormOpen}
           editing={editing}
+          duplicateFrom={duplicateFrom}
           onSave={handleSave}
         />
       </div>

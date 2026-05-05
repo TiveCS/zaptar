@@ -18,7 +18,9 @@ const zaptar = {
       ipcRenderer.invoke('connection:update', { id, patch }),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('connection:delete', { id }),
     test: (id: string): Promise<ConnectionTestResult> =>
-      ipcRenderer.invoke('connection:test', { id })
+      ipcRenderer.invoke('connection:test', { id }),
+    testDraft: (draft: ConnectionDraft): Promise<ConnectionTestResult> =>
+      ipcRenderer.invoke('connection:test-draft', draft)
   },
   compare: {
     listTables: (id: string): Promise<{ tables: string[] }> =>

@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { CheckCircle2, Eye, EyeOff, Loader2, XCircle } from 'lucide-react'
 import * as React from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Connection, ConnectionDraft, DialectId } from '@shared/types'
+import type { Connection, ConnectionDraft, ConnectionTestResult, DialectId } from '@shared/types'
+import { api } from '@renderer/lib/api'
 import { Button } from '@renderer/components/ui/button'
 import {
   Dialog,
@@ -36,71 +38,112 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+type TestState =
+  | { status: 'idle' }
+  | { status: 'testing' }
+  | { status: 'ok'; serverVersion: string }
+  | { status: 'error'; message: string }
+
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   editing?: Connection
+  duplicateFrom?: Connection
   onSave: (draft: ConnectionDraft) => Promise<void>
 }
 
-export function ConnectionForm({ open, onOpenChange, editing, onSave }: Props): React.JSX.Element {
+function blankDefaults(): FormValues {
+  return {
+    label: '',
+    dialect: 'mysql',
+    host: 'localhost',
+    port: 3306,
+    username: 'root',
+    password: '',
+    database: '',
+    sslEnabled: false
+  }
+}
+
+function editingDefaults(conn: Connection): FormValues {
+  return {
+    label: conn.label,
+    dialect: conn.dialect,
+    host: conn.host,
+    port: conn.port,
+    username: conn.username,
+    password: '',
+    database: conn.database,
+    sslEnabled: !!conn.ssl
+  }
+}
+
+function duplicateDefaults(conn: Connection): FormValues {
+  return {
+    ...editingDefaults(conn),
+    label: `Copy of ${conn.label}`
+  }
+}
+
+export function ConnectionForm({ open, onOpenChange, editing, duplicateFrom, onSave }: Props): React.JSX.Element {
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [testState, setTestState] = React.useState<TestState>({ status: 'idle' })
+
   const {
     register,
     handleSubmit,
     reset,
     control,
+    getValues,
     formState: { errors, isSubmitting }
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: editing
-      ? {
-          label: editing.label,
-          dialect: editing.dialect,
-          host: editing.host,
-          port: editing.port,
-          username: editing.username,
-          password: '',
-          database: editing.database,
-          sslEnabled: !!editing.ssl
-        }
-      : {
-          label: '',
-          dialect: 'mysql',
-          host: 'localhost',
-          port: 3306,
-          username: 'root',
-          password: '',
-          database: '',
-          sslEnabled: false
-        }
+      ? editingDefaults(editing)
+      : duplicateFrom
+        ? duplicateDefaults(duplicateFrom)
+        : blankDefaults()
   })
 
   React.useEffect(() => {
     if (!open) return
+    setTestState({ status: 'idle' })
+    setShowPassword(false)
     reset(
       editing
-        ? {
-            label: editing.label,
-            dialect: editing.dialect,
-            host: editing.host,
-            port: editing.port,
-            username: editing.username,
-            password: '',
-            database: editing.database,
-            sslEnabled: !!editing.ssl
-          }
-        : {
-            label: '',
-            dialect: 'mysql',
-            host: 'localhost',
-            port: 3306,
-            username: 'root',
-            password: '',
-            database: '',
-            sslEnabled: false
-          }
+        ? editingDefaults(editing)
+        : duplicateFrom
+          ? duplicateDefaults(duplicateFrom)
+          : blankDefaults()
     )
-  }, [open, editing, reset])
+  }, [open, editing, duplicateFrom, reset])
+
+  async function handleTest(): Promise<void> {
+    setTestState({ status: 'testing' })
+    let result: ConnectionTestResult
+    try {
+      const values = getValues()
+      // Edit mode + blank password → test the saved connection (keeps existing password)
+      if (editing && !values.password) {
+        result = await api.connection.test(editing.id)
+      } else {
+        const { sslEnabled, ...rest } = values
+        const draft: ConnectionDraft = {
+          ...rest,
+          dialect: rest.dialect as DialectId,
+          ssl: sslEnabled ? { rejectUnauthorized: true } : undefined
+        }
+        result = await api.connection.testDraft(draft)
+      }
+    } catch (err) {
+      result = { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    if (result.ok) {
+      setTestState({ status: 'ok', serverVersion: result.serverVersion ?? 'unknown' })
+    } else {
+      setTestState({ status: 'error', message: result.error ?? 'Connection failed' })
+    }
+  }
 
   async function onSubmit(values: FormValues): Promise<void> {
     const { sslEnabled, ...rest } = values
@@ -113,15 +156,21 @@ export function ConnectionForm({ open, onOpenChange, editing, onSave }: Props): 
     onOpenChange(false)
   }
 
+  const isTesting = testState.status === 'testing'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit connection' : 'New connection'}</DialogTitle>
+          <DialogTitle>
+            {editing ? 'Edit connection' : duplicateFrom ? 'Duplicate connection' : 'New connection'}
+          </DialogTitle>
           <DialogDescription>
             {editing
               ? 'Update the connection details.'
-              : 'Add a MySQL or MariaDB database connection. The password is encrypted by your OS keychain.'}
+              : duplicateFrom
+                ? 'Fields are pre-filled from the original. Re-enter the password to save.'
+                : 'Add a MySQL or MariaDB database connection. The password is encrypted by your OS keychain.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,8 +222,8 @@ export function ConnectionForm({ open, onOpenChange, editing, onSave }: Props): 
             </div>
           </div>
 
-          {/* Username + Password */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Username + Password — items-end aligns inputs even when labels differ in height */}
+          <div className="grid grid-cols-2 items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="username">Username</Label>
               <Input id="username" {...register('username')} />
@@ -184,14 +233,30 @@ export function ConnectionForm({ open, onOpenChange, editing, onSave }: Props): 
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password">
-                {editing ? 'Password (leave blank to keep)' : 'Password'}
+                {editing ? 'Password' : 'Password'}
+                {editing && (
+                  <span className="ml-1 text-xs font-normal text-[var(--color-muted-foreground)]">
+                    (blank = keep)
+                  </span>
+                )}
               </Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                {...register('password')}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  className="pr-9"
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -210,12 +275,48 @@ export function ConnectionForm({ open, onOpenChange, editing, onSave }: Props): 
             Enable SSL / TLS
           </label>
 
+          {/* Test result */}
+          {testState.status === 'ok' && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--color-diff-added)]">
+              <CheckCircle2 className="size-3.5 shrink-0" />
+              Connected · {testState.serverVersion}
+            </div>
+          )}
+          {testState.status === 'error' && (
+            <div className="flex items-start gap-1.5 text-xs text-[var(--color-destructive)]">
+              <XCircle className="mt-0.5 size-3.5 shrink-0" />
+              <span className="break-all">{testState.message}</span>
+            </div>
+          )}
+
           <DialogFooter className="mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTest}
+              disabled={isTesting || isSubmitting}
+            >
+              {isTesting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Testing…
+                </>
+              ) : (
+                'Test connection'
+              )}
+            </Button>
+            <div className="flex-1" />
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving…' : editing ? 'Save changes' : 'Add connection'}
+            <Button type="submit" disabled={isSubmitting || isTesting}>
+              {isSubmitting
+                ? 'Saving…'
+                : editing
+                  ? 'Save changes'
+                  : duplicateFrom
+                    ? 'Create duplicate'
+                    : 'Add connection'}
             </Button>
           </DialogFooter>
         </form>

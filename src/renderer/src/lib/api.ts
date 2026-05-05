@@ -14,6 +14,7 @@ export type ZaptarApi = {
     update(id: string, patch: Partial<ConnectionDraft>): Promise<Connection>
     delete(id: string): Promise<void>
     test(id: string): Promise<ConnectionTestResult>
+    testDraft(draft: ConnectionDraft): Promise<ConnectionTestResult>
   }
   compare: {
     listTables(id: string): Promise<{ tables: string[] }>

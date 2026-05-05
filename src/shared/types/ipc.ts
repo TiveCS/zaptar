@@ -12,6 +12,7 @@ export type IpcChannelMap = {
   }
   'connection:delete': { req: { id: string }; res: void }
   'connection:test': { req: { id: string }; res: ConnectionTestResult }
+  'connection:test-draft': { req: ConnectionDraft; res: ConnectionTestResult }
 
   'compare:list-tables': { req: { id: string }; res: { tables: string[] } }
   'compare:run': {

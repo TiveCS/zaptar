@@ -48,7 +48,7 @@ export function registerIpc(): void {
       ...rest,
       updatedAt: new Date().toISOString(),
       _encryptedPassword:
-        password !== undefined ? encryptPassword(password) : existing._encryptedPassword
+        password ? encryptPassword(password) : existing._encryptedPassword
     }
     db.data.connections[idx] = updated
     db.write()
@@ -61,6 +61,12 @@ export function registerIpc(): void {
     const db = getDb()
     db.data.connections = db.data.connections.filter((c) => c.id !== id)
     db.write()
+  })
+
+  // ── connection:test-draft ──────────────────────────────────────────────────
+  handle('connection:test-draft', async ({ password, ...rest }) => {
+    const conn = { ...rest, id: '', createdAt: '', updatedAt: '' }
+    return testMysqlConnection(conn, password)
   })
 
   // ── connection:test ────────────────────────────────────────────────────

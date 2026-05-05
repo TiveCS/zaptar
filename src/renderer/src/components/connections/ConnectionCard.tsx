@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Loader2, Pencil, Trash2, XCircle, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Copy, Loader2, Pencil, Trash2, XCircle, Zap } from 'lucide-react'
 import * as React from 'react'
 
 import type { Connection, ConnectionTestResult } from '@shared/types'
@@ -14,11 +14,12 @@ type TestState =
 type Props = {
   connection: Connection
   onEdit: (conn: Connection) => void
+  onDuplicate: (conn: Connection) => void
   onDelete: (id: string) => void
   onTest: (id: string) => Promise<ConnectionTestResult>
 }
 
-export function ConnectionCard({ connection, onEdit, onDelete, onTest }: Props): React.JSX.Element {
+export function ConnectionCard({ connection, onEdit, onDuplicate, onDelete, onTest }: Props): React.JSX.Element {
   const [testState, setTestState] = React.useState<TestState>({ status: 'idle' })
   const [errorExpanded, setErrorExpanded] = React.useState(false)
 
@@ -87,6 +88,10 @@ export function ConnectionCard({ connection, onEdit, onDelete, onTest }: Props):
               <Zap className="size-4" />
             )}
             <span className="sr-only">Test</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onDuplicate(connection)} title="Duplicate">
+            <Copy className="size-4" />
+            <span className="sr-only">Duplicate</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onEdit(connection)} title="Edit">
             <Pencil className="size-4" />
