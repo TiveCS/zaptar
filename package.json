@@ -1,10 +1,10 @@
 {
   "name": "zaptar",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "MySQL / MariaDB schema diff and migration script generator",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "TiveCS",
+  "homepage": "https://github.com/TiveCS/zaptar",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
