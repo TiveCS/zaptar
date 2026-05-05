@@ -43,6 +43,7 @@ export function diff(source: Schema, target: Schema): SchemaDiff {
 function diffTable(src: Table, tgt: Table): TableDiff {
   return {
     name: src.name,
+    sourceTable: src,
     columns: diffByName(src.columns, tgt.columns, diffColumn),
     indexes: diffByName(src.indexes, tgt.indexes, diffIndex),
     foreignKeys: diffByName(src.foreignKeys, tgt.foreignKeys, diffFk),

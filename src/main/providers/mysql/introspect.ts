@@ -100,18 +100,34 @@ export async function introspectSchema(
     const [colRows] = await client.execute<mysql.RowDataPacket[]>(colSql, colParams)
 
     // ── STATISTICS ───────────────────────────────────────────────────────
-    const stBase = `
-      SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, INDEX_TYPE,
-             COALESCE(INDEX_COMMENT, '') AS INDEX_COMMENT,
-             SEQ_IN_INDEX, COLUMN_NAME, SUB_PART, EXPRESSION
-      FROM information_schema.STATISTICS
-      WHERE TABLE_SCHEMA = ?`
-    const stParams: string[] = [db]
-    const stSql = tf
-      ? `${stBase} AND TABLE_NAME IN (${ph(tf.length)}) ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`
-      : `${stBase} ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`
-    if (tf) stParams.push(...tf)
-    const [stRows] = await client.execute<mysql.RowDataPacket[]>(stSql, stParams)
+    let stRows: mysql.RowDataPacket[] = []
+    {
+      const stBase = `
+        SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, INDEX_TYPE,
+               COALESCE(INDEX_COMMENT, '') AS INDEX_COMMENT,
+               SEQ_IN_INDEX, COLUMN_NAME, SUB_PART, EXPRESSION
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = ?`
+      const stBaseFallback = `
+        SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, INDEX_TYPE,
+               COALESCE(INDEX_COMMENT, '') AS INDEX_COMMENT,
+               SEQ_IN_INDEX, COLUMN_NAME, SUB_PART, NULL AS EXPRESSION
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = ?`
+      const stParams: string[] = [db]
+      const stSuffix = tf
+        ? ` AND TABLE_NAME IN (${ph(tf.length)}) ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`
+        : ` ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`
+      if (tf) stParams.push(...tf)
+      try {
+        const [rows] = await client.execute<mysql.RowDataPacket[]>(stBase + stSuffix, stParams)
+        stRows = rows
+      } catch {
+        // EXPRESSION column absent on MariaDB / MySQL < 8.0.13 — fall back without it
+        const [rows] = await client.execute<mysql.RowDataPacket[]>(stBaseFallback + stSuffix, stParams)
+        stRows = rows
+      }
+    }
 
     // ── FOREIGN KEYS ─────────────────────────────────────────────────────
     const fkBase = `

@@ -78,7 +78,7 @@ function DiffRow({
       </td>
       <td className="py-1.5 pr-2 font-mono text-xs">
         {srcText ? (
-          <span className={cn(kind === 'added' ? ROW_TEXT['added'] : '')}>{srcText}</span>
+          <span className={cn(kind === 'added' ? ROW_TEXT['added'] : kind === 'unchanged' ? ROW_TEXT['unchanged'] : '')}>{srcText}</span>
         ) : (
           <span className="text-[var(--color-muted-foreground)]/40">—</span>
         )}
@@ -91,7 +91,9 @@ function DiffRow({
                 ? ROW_TEXT['removed']
                 : kind === 'modified'
                   ? 'line-through opacity-60'
-                  : ''
+                  : kind === 'unchanged'
+                    ? ROW_TEXT['unchanged']
+                    : ''
             )}
           >
             {tgtText}
@@ -132,21 +134,39 @@ function DiffTable({ children }: { children: React.ReactNode }): React.JSX.Eleme
   )
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function changedNameSet(changes: Change<{ name: string }>[]): Set<string> {
+  const s = new Set<string>()
+  for (const ch of changes) {
+    s.add(ch.kind === 'added' ? ch.after.name : ch.before.name)
+  }
+  return s
+}
+
 // ── Section renderers ────────────────────────────────────────────────────────
 
-function ColumnsSection({ changes }: { changes: Change<Column>[] }): React.JSX.Element {
-  // Merge: all names that appear in either side, preserving order
+function ColumnsSection({
+  changes,
+  sourceColumns
+}: {
+  changes: Change<Column>[]
+  sourceColumns: Column[]
+}): React.JSX.Element {
   const names = new Map<string, Change<Column>>()
   for (const ch of changes) {
     const name =
-      ch.kind === 'added' ? ch.after.name : ch.kind === 'removed' ? ch.before.name : ch.before.name
+      ch.kind === 'added' ? ch.after.name : ch.before.name
     names.set(name, ch)
   }
 
-  if (names.size === 0) {
+  const changedNames = changedNameSet(changes)
+  const unchanged = sourceColumns.filter((col) => !changedNames.has(col.name))
+
+  if (names.size === 0 && unchanged.length === 0) {
     return (
       <p className="py-4 text-center text-sm text-[var(--color-muted-foreground)]">
-        No column changes
+        No columns
       </p>
     )
   }
@@ -168,7 +188,6 @@ function ColumnsSection({ changes }: { changes: Change<Column>[] }): React.JSX.E
               tgtText={fmtColumn(ch.before)}
             />
           )
-        // modified
         return (
           <DiffRow
             key={name}
@@ -180,15 +199,33 @@ function ColumnsSection({ changes }: { changes: Change<Column>[] }): React.JSX.E
           />
         )
       })}
+      {unchanged.map((col) => (
+        <DiffRow
+          key={col.name}
+          name={col.name}
+          kind="unchanged"
+          srcText={fmtColumn(col)}
+          tgtText={fmtColumn(col)}
+        />
+      ))}
     </DiffTable>
   )
 }
 
-function IndexesSection({ changes }: { changes: Change<Index>[] }): React.JSX.Element {
-  if (changes.length === 0)
+function IndexesSection({
+  changes,
+  sourceIndexes
+}: {
+  changes: Change<Index>[]
+  sourceIndexes: Index[]
+}): React.JSX.Element {
+  const changedNames = changedNameSet(changes)
+  const unchanged = sourceIndexes.filter((idx) => !changedNames.has(idx.name))
+
+  if (changes.length === 0 && unchanged.length === 0)
     return (
       <p className="py-4 text-center text-sm text-[var(--color-muted-foreground)]">
-        No index changes
+        No indexes
       </p>
     )
 
@@ -226,15 +263,33 @@ function IndexesSection({ changes }: { changes: Change<Index>[] }): React.JSX.El
           />
         )
       })}
+      {unchanged.map((idx) => (
+        <DiffRow
+          key={idx.name}
+          name={idx.name}
+          kind="unchanged"
+          srcText={fmtIndex(idx)}
+          tgtText={fmtIndex(idx)}
+        />
+      ))}
     </DiffTable>
   )
 }
 
-function FksSection({ changes }: { changes: Change<ForeignKey>[] }): React.JSX.Element {
-  if (changes.length === 0)
+function FksSection({
+  changes,
+  sourceFks
+}: {
+  changes: Change<ForeignKey>[]
+  sourceFks: ForeignKey[]
+}): React.JSX.Element {
+  const changedNames = changedNameSet(changes)
+  const unchanged = sourceFks.filter((fk) => !changedNames.has(fk.name))
+
+  if (changes.length === 0 && unchanged.length === 0)
     return (
       <p className="py-4 text-center text-sm text-[var(--color-muted-foreground)]">
-        No foreign key changes
+        No foreign keys
       </p>
     )
 
@@ -272,15 +327,33 @@ function FksSection({ changes }: { changes: Change<ForeignKey>[] }): React.JSX.E
           />
         )
       })}
+      {unchanged.map((fk) => (
+        <DiffRow
+          key={fk.name}
+          name={fk.name}
+          kind="unchanged"
+          srcText={fmtFk(fk)}
+          tgtText={fmtFk(fk)}
+        />
+      ))}
     </DiffTable>
   )
 }
 
-function ChecksSection({ changes }: { changes: Change<CheckConstraint>[] }): React.JSX.Element {
-  if (changes.length === 0)
+function ChecksSection({
+  changes,
+  sourceChecks
+}: {
+  changes: Change<CheckConstraint>[]
+  sourceChecks: CheckConstraint[]
+}): React.JSX.Element {
+  const changedNames = changedNameSet(changes)
+  const unchanged = sourceChecks.filter((ck) => !changedNames.has(ck.name))
+
+  if (changes.length === 0 && unchanged.length === 0)
     return (
       <p className="py-4 text-center text-sm text-[var(--color-muted-foreground)]">
-        No check constraint changes
+        No check constraints
       </p>
     )
 
@@ -318,6 +391,15 @@ function ChecksSection({ changes }: { changes: Change<CheckConstraint>[] }): Rea
           />
         )
       })}
+      {unchanged.map((ck) => (
+        <DiffRow
+          key={ck.name}
+          name={ck.name}
+          kind="unchanged"
+          srcText={fmtCheck(ck)}
+          tgtText={fmtCheck(ck)}
+        />
+      ))}
     </DiffTable>
   )
 }
@@ -502,10 +584,30 @@ export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
         )}
         {modifiedTable && (
           <>
-            {section === 'columns' && <ColumnsSection changes={modifiedTable.columns} />}
-            {section === 'indexes' && <IndexesSection changes={modifiedTable.indexes} />}
-            {section === 'fks' && <FksSection changes={modifiedTable.foreignKeys} />}
-            {section === 'checks' && <ChecksSection changes={modifiedTable.checkConstraints} />}
+            {section === 'columns' && (
+              <ColumnsSection
+                changes={modifiedTable.columns}
+                sourceColumns={modifiedTable.sourceTable.columns}
+              />
+            )}
+            {section === 'indexes' && (
+              <IndexesSection
+                changes={modifiedTable.indexes}
+                sourceIndexes={modifiedTable.sourceTable.indexes}
+              />
+            )}
+            {section === 'fks' && (
+              <FksSection
+                changes={modifiedTable.foreignKeys}
+                sourceFks={modifiedTable.sourceTable.foreignKeys}
+              />
+            )}
+            {section === 'checks' && (
+              <ChecksSection
+                changes={modifiedTable.checkConstraints}
+                sourceChecks={modifiedTable.sourceTable.checkConstraints}
+              />
+            )}
             {section === 'options' && <OptionsSection td={modifiedTable} />}
           </>
         )}

@@ -12,6 +12,7 @@ export type SchemaDiff = {
 
 export type TableDiff = {
   name: string
+  sourceTable: Table
   columns: Change<Column>[]
   indexes: Change<Index>[]
   foreignKeys: Change<ForeignKey>[]

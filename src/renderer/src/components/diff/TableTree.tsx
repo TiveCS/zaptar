@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileCode2, Minus, Plus, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileCode2, Minus, Plus, RefreshCw, Search } from 'lucide-react'
 import * as React from 'react'
 
 import type { SchemaDiff } from '@shared/types'
@@ -103,8 +103,19 @@ export function TableTree({
   view,
   onViewChange
 }: Props): React.JSX.Element {
+  const [search, setSearch] = React.useState('')
+
   const totalChanges =
     diff.addedTables.length + diff.modifiedTables.length + diff.removedTables.length
+
+  const q = search.trim().toLowerCase()
+  const filter = (names: string[]): string[] =>
+    q ? names.filter((n) => n.toLowerCase().includes(q)) : names
+
+  const handleSelect = (n: string): void => {
+    onViewChange('diff')
+    onSelect(n)
+  }
 
   return (
     <aside className="flex h-full flex-col overflow-hidden border-r border-[var(--color-border)]">
@@ -120,43 +131,45 @@ export function TableTree({
         )}
       </div>
 
+      {/* Search */}
+      <div className="border-b border-[var(--color-border)] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/40 px-2 py-1">
+          <Search className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+          <input
+            type="text"
+            placeholder="Search tables…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-transparent text-xs outline-none placeholder:text-[var(--color-muted-foreground)]/60"
+          />
+        </div>
+      </div>
+
       {/* Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         <TableGroup
           group="added"
-          names={diff.addedTables.map((t) => t.name)}
+          names={filter(diff.addedTables.map((t) => t.name))}
           selected={selectedTable}
-          onSelect={(n) => {
-            onViewChange('diff')
-            onSelect(n)
-          }}
+          onSelect={handleSelect}
         />
         <TableGroup
           group="modified"
-          names={diff.modifiedTables.map((t) => t.name)}
+          names={filter(diff.modifiedTables.map((t) => t.name))}
           selected={selectedTable}
-          onSelect={(n) => {
-            onViewChange('diff')
-            onSelect(n)
-          }}
+          onSelect={handleSelect}
         />
         <TableGroup
           group="removed"
-          names={diff.removedTables.map((t) => t.name)}
+          names={filter(diff.removedTables.map((t) => t.name))}
           selected={selectedTable}
-          onSelect={(n) => {
-            onViewChange('diff')
-            onSelect(n)
-          }}
+          onSelect={handleSelect}
         />
         <TableGroup
           group="unchanged"
-          names={diff.unchangedTables}
+          names={filter(diff.unchangedTables)}
           selected={selectedTable}
-          onSelect={(n) => {
-            onViewChange('diff')
-            onSelect(n)
-          }}
+          onSelect={handleSelect}
         />
       </div>
 

@@ -50,6 +50,18 @@ function emptyDiff(): SchemaDiff {
 function emptyTableDiff(name: string): TableDiff {
   return {
     name,
+    sourceTable: {
+      name,
+      engine: 'InnoDB',
+      charset: 'utf8mb4',
+      collation: 'utf8mb4_general_ci',
+      comment: '',
+      columns: [],
+      indexes: [],
+      foreignKeys: [],
+      checkConstraints: [],
+      options: {}
+    },
     columns: [],
     indexes: [],
     foreignKeys: [],
