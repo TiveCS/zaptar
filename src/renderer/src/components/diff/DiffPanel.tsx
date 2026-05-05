@@ -428,32 +428,6 @@ function OptionsSection({ td }: { td: TableDiff }): React.JSX.Element {
   )
 }
 
-// ── Whole-table display for added/removed tables ─────────────────────────────
-
-function TableSnapshot({
-  table,
-  kind
-}: {
-  table: Table
-  kind: 'added' | 'removed'
-}): React.JSX.Element {
-  return (
-    <div className="space-y-4">
-      <DiffTable>
-        {table.columns.map((col) => (
-          <DiffRow
-            key={col.name}
-            name={col.name}
-            kind={kind}
-            srcText={kind === 'added' ? fmtColumn(col) : ''}
-            tgtText={kind === 'removed' ? fmtColumn(col) : ''}
-          />
-        ))}
-      </DiffTable>
-    </div>
-  )
-}
-
 // ── Main DiffPanel ───────────────────────────────────────────────────────────
 
 type Props = {
@@ -531,6 +505,16 @@ export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Eleme
         >
           {kindLabel[changeKind]}
         </span>
+        {addedTable && (
+          <span className="text-xs text-[var(--color-muted-foreground)]">
+            New in source — will be created in target
+          </span>
+        )}
+        {removedTable && (
+          <span className="text-xs text-[var(--color-destructive)]/70">
+            Not in source — will be dropped from target
+          </span>
+        )}
         {modifiedTable && (
           <span className="text-xs text-[var(--color-muted-foreground)]">
             {[
@@ -547,10 +531,11 @@ export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Eleme
         )}
       </div>
 
-      {/* Section tabs (modified or unchanged) */}
-      {(modifiedTable || isUnchanged) && (
+      {/* Section tabs — all table states */}
+      {(addedTable || removedTable || modifiedTable || isUnchanged) && (
         <div className="flex gap-0 border-b border-[var(--color-border)]">
           {(modifiedTable ? SECTIONS : unchangedSections).map(({ key, label }) => {
+            const snapshotTable = addedTable ?? removedTable
             const count = modifiedTable
               ? key === 'columns'
                 ? modifiedTable.columns.length
@@ -561,7 +546,15 @@ export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Eleme
                     : key === 'checks'
                       ? modifiedTable.checkConstraints.length
                       : modifiedTable.optionChanges.length
-              : 0
+              : snapshotTable
+                ? key === 'columns'
+                  ? snapshotTable.columns.length
+                  : key === 'indexes'
+                    ? snapshotTable.indexes.length
+                    : key === 'fks'
+                      ? snapshotTable.foreignKeys.length
+                      : snapshotTable.checkConstraints.length
+                : 0
             return (
               <button
                 key={key}
@@ -593,20 +586,60 @@ export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Eleme
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {addedTable && (
-          <div>
-            <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
-              This table is new in source — it will be created in target.
-            </p>
-            <TableSnapshot table={addedTable} kind="added" />
-          </div>
+          <>
+            {section === 'columns' && (
+              <ColumnsSection
+                changes={addedTable.columns.map((col) => ({ kind: 'added' as const, after: col }))}
+                sourceColumns={[]}
+              />
+            )}
+            {section === 'indexes' && (
+              <IndexesSection
+                changes={addedTable.indexes.map((idx) => ({ kind: 'added' as const, after: idx }))}
+                sourceIndexes={[]}
+              />
+            )}
+            {section === 'fks' && (
+              <FksSection
+                changes={addedTable.foreignKeys.map((fk) => ({ kind: 'added' as const, after: fk }))}
+                sourceFks={[]}
+              />
+            )}
+            {section === 'checks' && (
+              <ChecksSection
+                changes={addedTable.checkConstraints.map((ck) => ({ kind: 'added' as const, after: ck }))}
+                sourceChecks={[]}
+              />
+            )}
+          </>
         )}
         {removedTable && (
-          <div>
-            <p className="mb-3 text-sm text-[var(--color-destructive)]">
-              ⚠ This table exists in target but not in source — it will be dropped.
-            </p>
-            <TableSnapshot table={removedTable} kind="removed" />
-          </div>
+          <>
+            {section === 'columns' && (
+              <ColumnsSection
+                changes={removedTable.columns.map((col) => ({ kind: 'removed' as const, before: col }))}
+                sourceColumns={[]}
+              />
+            )}
+            {section === 'indexes' && (
+              <IndexesSection
+                changes={removedTable.indexes.map((idx) => ({ kind: 'removed' as const, before: idx }))}
+                sourceIndexes={[]}
+              />
+            )}
+            {section === 'fks' && (
+              <FksSection
+                changes={removedTable.foreignKeys.map((fk) => ({ kind: 'removed' as const, before: fk }))}
+                sourceFks={[]}
+              />
+            )}
+            {section === 'checks' && (
+              <ChecksSection
+                changes={removedTable.checkConstraints.map((ck) => ({ kind: 'removed' as const, before: ck }))}
+                sourceChecks={[]}
+              />
+            )}
+          </>
         )}
         {modifiedTable && (
           <>
