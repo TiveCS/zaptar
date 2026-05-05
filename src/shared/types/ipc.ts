@@ -1,6 +1,7 @@
 import type { Connection, ConnectionDraft, ConnectionTestResult } from './connection'
 import type { SchemaDiff } from './diff'
 import type { MigrationScript } from './script'
+import type { Table } from './schema'
 
 export type IpcChannelMap = {
   'connection:list': { req: void; res: Connection[] }
@@ -16,6 +17,10 @@ export type IpcChannelMap = {
   'compare:run': {
     req: { sourceId: string; targetId: string; tables?: string[] }
     res: { diff: SchemaDiff; script: MigrationScript }
+  }
+  'compare:table': {
+    req: { connectionId: string; tableName: string }
+    res: Table | null
   }
 
   'script:save': { req: { script: MigrationScript }; res: { path: string | null } }

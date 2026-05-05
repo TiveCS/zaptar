@@ -107,6 +107,17 @@ export function registerIpc(): void {
     return { diff: schemaDiff, script }
   })
 
+  // ── compare:table — fetch single table schema on demand ────────────────
+  handle('compare:table', async ({ connectionId, tableName }) => {
+    const db = getDb()
+    const stored = db.data.connections.find((c) => c.id === connectionId)
+    if (!stored) throw new Error(`Connection not found: ${connectionId}`)
+    const pw = decryptPassword(stored._encryptedPassword)
+    const { _encryptedPassword: _, ...conn } = stored
+    const schema = await introspectSchema(conn, pw, [tableName])
+    return schema.tables[0] ?? null
+  })
+
   // ── script:save ────────────────────────────────────────────────────────
   handle('script:save', async ({ script }) => {
     const result = await dialog.showSaveDialog({

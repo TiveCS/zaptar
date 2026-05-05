@@ -5,6 +5,7 @@ import type {
   MigrationScript,
   SchemaDiff
 } from '@shared/types'
+import type { Table } from '@shared/types/schema'
 
 export type ZaptarApi = {
   connection: {
@@ -21,6 +22,7 @@ export type ZaptarApi = {
       targetId: string,
       tables?: string[]
     ): Promise<{ diff: SchemaDiff; script: MigrationScript }>
+    table(connectionId: string, tableName: string): Promise<Table | null>
   }
   script: {
     save(script: MigrationScript): Promise<{ path: string | null }>

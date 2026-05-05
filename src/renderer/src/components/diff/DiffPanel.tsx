@@ -3,6 +3,7 @@ import * as React from 'react'
 import type { Change, FieldDiff, SchemaDiff, TableDiff } from '@shared/types'
 import type { CheckConstraint, Column, ForeignKey, Index, Table } from '@shared/types/schema'
 import { cn } from '@renderer/lib/utils'
+import { api } from '@renderer/lib/api'
 
 type Section = 'columns' | 'indexes' | 'fks' | 'checks' | 'options'
 
@@ -458,6 +459,7 @@ function TableSnapshot({
 type Props = {
   diff: SchemaDiff
   tableName: string
+  sourceId: string
 }
 
 const SECTIONS: { key: Section; label: string }[] = [
@@ -468,7 +470,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: 'options', label: 'Table Options' }
 ]
 
-export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
+export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Element {
   const [section, setSection] = React.useState<Section>('columns')
 
   // Classify the table
@@ -484,6 +486,29 @@ export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
       : modifiedTable
         ? 'modified'
         : 'unchanged'
+
+  // On-demand fetch for unchanged table schema
+  const [fetchedTable, setFetchedTable] = React.useState<Table | null>(null)
+  const [fetchingTable, setFetchingTable] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!isUnchanged) return
+    setFetchedTable(null)
+    setFetchingTable(true)
+    api.compare
+      .table(sourceId, tableName)
+      .then((t) => setFetchedTable(t))
+      .catch(() => setFetchedTable(null))
+      .finally(() => setFetchingTable(false))
+  }, [tableName, isUnchanged, sourceId])
+
+  // For unchanged tables, reuse section components with empty changes
+  const unchangedSections: { key: Section; label: string }[] = [
+    { key: 'columns', label: 'Columns' },
+    { key: 'indexes', label: 'Indexes' },
+    { key: 'fks', label: 'Foreign Keys' },
+    { key: 'checks', label: 'Check Constraints' }
+  ]
 
   const kindLabel: Record<ChangeKind, string> = {
     added: 'Added',
@@ -522,12 +547,12 @@ export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
         )}
       </div>
 
-      {/* Section tabs (only for modified) */}
-      {modifiedTable && (
+      {/* Section tabs (modified or unchanged) */}
+      {(modifiedTable || isUnchanged) && (
         <div className="flex gap-0 border-b border-[var(--color-border)]">
-          {SECTIONS.map(({ key, label }) => {
-            const count =
-              key === 'columns'
+          {(modifiedTable ? SECTIONS : unchangedSections).map(({ key, label }) => {
+            const count = modifiedTable
+              ? key === 'columns'
                 ? modifiedTable.columns.length
                 : key === 'indexes'
                   ? modifiedTable.indexes.length
@@ -536,6 +561,7 @@ export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
                     : key === 'checks'
                       ? modifiedTable.checkConstraints.length
                       : modifiedTable.optionChanges.length
+              : 0
             return (
               <button
                 key={key}
@@ -612,9 +638,43 @@ export function DiffPanel({ diff, tableName }: Props): React.JSX.Element {
           </>
         )}
         {isUnchanged && (
-          <p className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">
-            This table is identical in both databases — no changes.
-          </p>
+          <>
+            {fetchingTable && (
+              <div className="flex items-center justify-center py-12 text-sm text-[var(--color-muted-foreground)]">
+                <svg
+                  className="mr-2 size-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                Loading table schema…
+              </div>
+            )}
+            {!fetchingTable && fetchedTable && (
+              <>
+                {section === 'columns' && (
+                  <ColumnsSection changes={[]} sourceColumns={fetchedTable.columns} />
+                )}
+                {section === 'indexes' && (
+                  <IndexesSection changes={[]} sourceIndexes={fetchedTable.indexes} />
+                )}
+                {section === 'fks' && (
+                  <FksSection changes={[]} sourceFks={fetchedTable.foreignKeys} />
+                )}
+                {section === 'checks' && (
+                  <ChecksSection changes={[]} sourceChecks={fetchedTable.checkConstraints} />
+                )}
+              </>
+            )}
+            {!fetchingTable && !fetchedTable && (
+              <p className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">
+                Could not load table schema.
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import type {
   MigrationScript,
   SchemaDiff
 } from '../shared/types'
+import type { Table } from '../shared/types/schema'
 
 const zaptar = {
   connection: {
@@ -27,7 +28,9 @@ const zaptar = {
       targetId: string,
       tables?: string[]
     ): Promise<{ diff: SchemaDiff; script: MigrationScript }> =>
-      ipcRenderer.invoke('compare:run', { sourceId, targetId, tables })
+      ipcRenderer.invoke('compare:run', { sourceId, targetId, tables }),
+    table: (connectionId: string, tableName: string): Promise<Table | null> =>
+      ipcRenderer.invoke('compare:table', { connectionId, tableName })
   },
   script: {
     save: (script: MigrationScript): Promise<{ path: string | null }> =>

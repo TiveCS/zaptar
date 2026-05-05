@@ -28,7 +28,7 @@ function SummaryChip({
 
 export function ResultPage(): React.JSX.Element {
   const navigate = useNavigate()
-  const { diff, script, selectedTable, setSelectedTable } = useStore()
+  const { diff, script, selectedTable, setSelectedTable, sourceId } = useStore()
   const [view, setView] = React.useState<'diff' | 'script'>('diff')
 
   function handleSelect(name: string): void {
@@ -122,7 +122,7 @@ export function ResultPage(): React.JSX.Element {
           {view === 'script' ? (
             <ScriptPreview script={script} />
           ) : selectedTable ? (
-            <DiffPanel diff={diff} tableName={selectedTable} />
+            <DiffPanel diff={diff} tableName={selectedTable} sourceId={sourceId ?? ''} />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <div className="rounded-full bg-[var(--color-muted)] p-3">
