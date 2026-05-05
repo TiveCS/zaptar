@@ -134,7 +134,11 @@ export function registerIpc(): void {
     if (result.canceled || !result.filePath) return { path: null }
     const { writeFileSync } = await import('fs')
     const sql = script.statements.map((s) => s.sql).join('\n\n')
-    writeFileSync(result.filePath, sql, 'utf8')
+    try {
+      writeFileSync(result.filePath, sql, 'utf8')
+    } catch (err) {
+      throw new Error(`Failed to write file: ${err instanceof Error ? err.message : String(err)}`)
+    }
     return { path: result.filePath }
   })
 

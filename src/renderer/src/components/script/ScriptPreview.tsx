@@ -149,8 +149,12 @@ type Props = {
 }
 
 export function ScriptPreview({ script }: Props): React.JSX.Element {
-  const [copyDone, setCopyDone] = React.useState(false)
-  const [saveMsg, setSaveMsg] = React.useState<string | null>(null)
+  const [notice, setNotice] = React.useState<{ text: string; kind: 'success' | 'error' } | null>(null)
+
+  function showNotice(text: string, kind: 'success' | 'error', ms = 3000): void {
+    setNotice({ text, kind })
+    setTimeout(() => setNotice(null), ms)
+  }
   const [warningsOpen, setWarningsOpen] = React.useState(false)
 
   const dangerous = script.statements.filter((s) => s.destructive)
@@ -159,16 +163,20 @@ export function ScriptPreview({ script }: Props): React.JSX.Element {
   )
 
   async function handleCopy(): Promise<void> {
-    await api.script.copy(script)
-    setCopyDone(true)
-    setTimeout(() => setCopyDone(false), 2000)
+    try {
+      await api.script.copy(script)
+      showNotice('Copied!', 'success', 2000)
+    } catch (err) {
+      showNotice(`Copy failed: ${err instanceof Error ? err.message : String(err)}`, 'error')
+    }
   }
 
   async function handleSave(): Promise<void> {
-    const result = await api.script.save(script)
-    if (result.path) {
-      setSaveMsg(`Saved to ${result.path}`)
-      setTimeout(() => setSaveMsg(null), 4000)
+    try {
+      const result = await api.script.save(script)
+      if (result.path) showNotice(`Saved to ${result.path}`, 'success', 4000)
+    } catch (err) {
+      showNotice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 
@@ -187,14 +195,25 @@ export function ScriptPreview({ script }: Props): React.JSX.Element {
             </span>
           )}
         </div>
-        {saveMsg && <span className="text-xs text-[var(--color-diff-added)]">{saveMsg}</span>}
+        {notice && (
+          <span
+            className={cn(
+              'text-xs',
+              notice.kind === 'success'
+                ? 'text-[var(--color-diff-added)]'
+                : 'text-[var(--color-destructive)]'
+            )}
+          >
+            {notice.text}
+          </span>
+        )}
         <Button variant="outline" size="sm" onClick={handleSave}>
           <Save className="size-3.5" />
           Save .sql
         </Button>
         <Button variant="outline" size="sm" onClick={handleCopy}>
           <Copy className="size-3.5" />
-          {copyDone ? 'Copied!' : 'Copy'}
+          Copy
         </Button>
       </div>
 
