@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, Loader2, Play } from 'lucide-react'
+import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, Loader2, Play, Search } from 'lucide-react'
 import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -36,7 +36,7 @@ function ConnectionPicker({
   const available = connections.filter((c) => c.id !== excludeId)
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
           {label}
@@ -88,6 +88,7 @@ function TableCheckboxList({
   onClearAll: () => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = React.useState(false)
+  const [search, setSearch] = React.useState('')
 
   if (state.status === 'idle') return <></>
 
@@ -117,12 +118,14 @@ function TableCheckboxList({
   }
 
   const tables = state.tables
+  const q = search.trim().toLowerCase()
+  const visible = q ? tables.filter((t) => t.toLowerCase().includes(q)) : tables
   const allSelected = tables.every((t) => selected.has(t))
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
+    <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
         <button
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-1.5 text-sm font-medium"
@@ -139,7 +142,7 @@ function TableCheckboxList({
         </button>
         <div className="flex gap-2 text-xs">
           <button
-            onClick={() => onSelectAll(tables)}
+            onClick={() => onSelectAll(visible)}
             className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
           >
             All
@@ -154,35 +157,56 @@ function TableCheckboxList({
         </div>
       </div>
 
-      {/* Table list */}
       {!collapsed && (
-        <div className="max-h-64 overflow-y-auto p-2">
-          {tables.length === 0 ? (
-            <p className="py-4 text-center text-xs text-[var(--color-muted-foreground)]">
-              No tables found in this database
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-3">
-              {tables.map((name) => (
-                <label
-                  key={name}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-[var(--color-accent)]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(name)}
-                    onChange={() => onToggle(name)}
-                    className="rounded"
-                  />
-                  <span className="truncate font-mono text-xs">{name}</span>
-                </label>
-              ))}
+        <>
+          {/* Search */}
+          <div className="shrink-0 border-b border-[var(--color-border)] px-3 py-2">
+            <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/40 px-2 py-1">
+              <Search className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
+              <input
+                type="text"
+                placeholder="Filter tables…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-transparent text-xs outline-none placeholder:text-[var(--color-muted-foreground)]/60"
+              />
+              {search && (
+                <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">
+                  {visible.length}/{tables.length}
+                </span>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+
+          {/* Table list */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {visible.length === 0 ? (
+              <p className="py-4 text-center text-xs text-[var(--color-muted-foreground)]">
+                {q ? 'No tables match your search' : 'No tables found in this database'}
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-3">
+                {visible.map((name) => (
+                  <label
+                    key={name}
+                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-[var(--color-accent)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(name)}
+                      onChange={() => onToggle(name)}
+                      className="rounded"
+                    />
+                    <span className="truncate font-mono text-xs">{name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Select-all checkbox in header (hidden, controlled via buttons above) */}
+      {/* Hidden select-all checkbox for a11y */}
       <input
         type="checkbox"
         className="sr-only"
@@ -213,12 +237,10 @@ export function ComparePage(): React.JSX.Element {
 
   const [tableState, setTableState] = React.useState<TableLoadState>({ status: 'idle' })
 
-  // Load connections on mount if not already loaded
   React.useEffect(() => {
     if (!connectionsLoaded) loadConnections()
   }, [connectionsLoaded, loadConnections])
 
-  // When source changes, load its tables
   React.useEffect(() => {
     if (!sourceId) return
 
@@ -250,17 +272,18 @@ export function ComparePage(): React.JSX.Element {
 
   async function handleRunCompare(): Promise<void> {
     await runCompare()
-    // Navigate to result only on success
     if (useStore.getState().compareStatus === 'success') {
       navigate('/result')
     }
   }
 
   const canRun = !!sourceId && !!targetId && sourceId !== targetId && compareStatus !== 'loading'
+  const showTableList = !!sourceId && sourceId !== targetId
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="flex h-full flex-col">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col min-h-0 px-6 pt-8 pb-16">
+        {/* Title */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">Compare schemas</h1>
           <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
@@ -270,21 +293,17 @@ export function ComparePage(): React.JSX.Element {
         </div>
 
         {/* Connection pickers */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-4">
           <ConnectionPicker
             label="Source"
             sublabel="The newer schema"
             value={sourceId}
-            onChange={(id) => {
-              setSourceId(id)
-            }}
+            onChange={(id) => { setSourceId(id) }}
             excludeId={targetId}
           />
-
           <div className="mt-8 flex items-center justify-center">
             <ArrowRight className="size-5 text-[var(--color-muted-foreground)]" />
           </div>
-
           <ConnectionPicker
             label="Target"
             sublabel="Will receive the migration"
@@ -303,8 +322,8 @@ export function ComparePage(): React.JSX.Element {
         )}
 
         {/* Table selection */}
-        {sourceId && sourceId !== targetId && (
-          <div className="mt-6">
+        {showTableList && (
+          <div className="mt-6 flex min-h-0 flex-1 flex-col">
             <TableCheckboxList
               state={tableState}
               selected={selectedTables}
@@ -348,3 +367,4 @@ export function ComparePage(): React.JSX.Element {
     </div>
   )
 }
+
