@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@renderer/components/ui/button'
+import { DataDiffView } from '@renderer/components/data/DataDiffView'
 import { DiffPanel } from '@renderer/components/diff/DiffPanel'
 import { TableTree } from '@renderer/components/diff/TableTree'
 import { ScriptPreview } from '@renderer/components/script/ScriptPreview'
@@ -29,8 +30,9 @@ function SummaryChip({
 
 export function ResultPage(): React.JSX.Element {
   const navigate = useNavigate()
-  const { diff, script, selectedTable, setSelectedTable, sourceId } = useStore()
+  const { diff, script, selectedTable, setSelectedTable, sourceId, targetId } = useStore()
   const [view, setView] = React.useState<'diff' | 'script'>('diff')
+  const [resultTab, setResultTab] = React.useState<'schema' | 'data'>('schema')
 
   function handleSelect(name: string): void {
     setSelectedTable(name)
@@ -138,6 +140,24 @@ export function ResultPage(): React.JSX.Element {
           </div>
         )}
 
+        {/* Schema / Data tab switcher */}
+        <div className="mx-2 flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5">
+          {(['schema', 'data'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setResultTab(tab)}
+              className={cn(
+                'rounded px-3 py-0.5 text-xs font-medium capitalize transition-colors',
+                resultTab === tab
+                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
+                  : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
         <div className="ml-auto">
           <Button variant="outline" size="sm" onClick={() => navigate('/compare')}>
             New compare
@@ -145,7 +165,15 @@ export function ResultPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* ── Two-pane body ────────────────────────────────────────────────── */}
+      {/* ── Data tab ─────────────────────────────────────────────────────── */}
+      {resultTab === 'data' && (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <DataDiffView diff={diff} sourceId={sourceId ?? ''} targetId={targetId ?? ''} />
+        </div>
+      )}
+
+      {/* ── Schema tab: Two-pane body ─────────────────────────────────────── */}
+      {resultTab === 'schema' && (
       <div
         className="grid min-h-0 flex-1 overflow-hidden"
         style={{ gridTemplateColumns: '260px 1fr' }}
@@ -198,6 +226,7 @@ export function ResultPage(): React.JSX.Element {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

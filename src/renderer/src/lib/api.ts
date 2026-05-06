@@ -2,6 +2,7 @@ import type {
   Connection,
   ConnectionDraft,
   ConnectionTestResult,
+  DataTableDiff,
   MigrationScript,
   SchemaDiff
 } from '@shared/types'
@@ -33,6 +34,15 @@ export type ZaptarApi = {
     onAvailable(cb: (version: string) => void): void
     onDownloaded(cb: () => void): void
     install(): Promise<void>
+  }
+  data: {
+    compare(
+      sourceId: string,
+      targetId: string,
+      tableName: string,
+      keyColumns: string[],
+      limit: number
+    ): Promise<DataTableDiff>
   }
 }
 

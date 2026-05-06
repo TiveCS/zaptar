@@ -1,4 +1,5 @@
 export * from './connection'
+export * from './data'
 export * from './diff'
 export * from './ipc'
 export * from './schema'

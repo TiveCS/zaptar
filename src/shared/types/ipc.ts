@@ -1,4 +1,5 @@
 import type { Connection, ConnectionDraft, ConnectionTestResult } from './connection'
+import type { DataTableDiff } from './data'
 import type { SchemaDiff } from './diff'
 import type { MigrationScript } from './script'
 import type { Table } from './schema'
@@ -28,6 +29,17 @@ export type IpcChannelMap = {
   'script:copy': { req: { script: MigrationScript }; res: void }
 
   'update:install': { req: void; res: void }
+
+  'data:compare': {
+    req: {
+      sourceId: string
+      targetId: string
+      tableName: string
+      keyColumns: string[]
+      limit: number
+    }
+    res: DataTableDiff
+  }
 }
 
 export type IpcChannel = keyof IpcChannelMap

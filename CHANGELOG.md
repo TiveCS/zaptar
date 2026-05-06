@@ -1,5 +1,63 @@
 # Changelog
 
+## v1.1.0
+
+### Features
+
+#### Data Comparison (new tab on Result page)
+- New **Data** tab alongside the existing Schema tab on the Result page
+- Compare actual row data between two databases for any selected table — designed for config/settings tables that live in the DB
+- On-demand per table (lazy load, same pattern as unchanged schema fetch) — no bulk fetching
+
+#### Row-level Diff
+- Detects **added** rows (in source, missing from target), **removed** rows (in target, missing from source), and **modified** rows (key matches, values differ)
+- Modified rows show before → after inline with strikethrough on changed cells
+- Key columns highlighted in column header with `key` badge
+- `NULL` values rendered in muted italic style for clarity
+
+#### Key Column Picker
+- Choose which columns to use as the row match key
+- Primary key auto-selected on load (resolved from table schema indexes)
+- Bounded scrollable container — handles tables with many columns without layout overflow
+- Tooltips on each chip explain select/deselect action
+
+#### Row Filter Chips
+- Clickable chips in the results toolbar to show/hide **added**, **removed**, and **modified** rows independently
+- Filter affects both the row diff table and the generated SQL — uncheck "removed" → no DELETE statements
+- `Show:` label makes the filter intent immediately clear; `title` tooltip on each chip for discoverability
+
+#### Data Sync SQL Generation
+- Generates **INSERT / UPDATE / DELETE** statements separate from the schema migration DDL — no mixing of data and schema changes
+- Multi-line formatted output: column list and values on separate lines for INSERT; one SET clause per line for UPDATE
+- SQL syntax highlighting (same VS Code Dark+ palette as the schema migration script)
+- Copy to clipboard or save as `.sql` file directly from the results toolbar
+
+#### "Skip key columns in INSERT" option
+- Toggle to omit key columns from INSERT statements so the target DB auto-generates the ID
+- Useful when the source PK value conflicts with an existing row in the target (e.g. config table ID already occupied)
+- DELETE and UPDATE still use the key in WHERE — only INSERT column list is affected
+
+#### Full-screen SQL Modal
+- Expand button (⤢) on the Data sync SQL section header opens a full-screen overlay
+- Full-height syntax-highlighted SQL with Save and Copy actions in the modal header
+- Closes with the × button; filter state synced between inline and modal views
+
+#### Row Limit
+- Configurable row limit per table (default 10 000)
+- Fetches `limit + 1` rows to detect cap; cap warning banner shown when either side hits the limit
+
+### Performance
+- Table tree sidebar virtualized with `@tanstack/react-virtual` — renders only visible rows regardless of total table count; eliminates jank on large schemas
+
+### Fixes
+- Horizontal scrollbar in SQL preview now sticks to the bottom of the visible container instead of appearing only at the end of content
+- Horizontal scroll in row diff table properly separated from vertical scroll (independent overflow axes)
+
+### Refactoring
+- SQL syntax tokenizer and `SqlCode` component extracted to `src/renderer/src/lib/sql-highlight.tsx` — shared between schema migration script and data sync preview
+
+---
+
 ## v1.0.1
 
 ### Features

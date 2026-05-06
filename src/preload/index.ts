@@ -4,6 +4,7 @@ import type {
   Connection,
   ConnectionDraft,
   ConnectionTestResult,
+  DataTableDiff,
   MigrationScript,
   SchemaDiff
 } from '../shared/types'
@@ -47,6 +48,16 @@ const zaptar = {
       ipcRenderer.on('update:downloaded', () => cb())
     },
     install: (): Promise<void> => ipcRenderer.invoke('update:install')
+  },
+  data: {
+    compare: (
+      sourceId: string,
+      targetId: string,
+      tableName: string,
+      keyColumns: string[],
+      limit: number
+    ): Promise<DataTableDiff> =>
+      ipcRenderer.invoke('data:compare', { sourceId, targetId, tableName, keyColumns, limit })
   }
 } as const
 

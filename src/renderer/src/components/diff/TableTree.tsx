@@ -161,7 +161,7 @@ export function TableTree({
             const row = rows[vItem.index]
 
             if (row.kind === 'header') {
-              const { label, color, icon: Icon } = GROUP_META[row.group]
+              const { label, color } = GROUP_META[row.group]
               const isOpen = !collapsed[row.group]
               return (
                 <div

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { IpcChannel, IpcChannelMap } from '../shared/types'
 import { emitSql } from './providers/mysql/emit-sql'
 import { testMysqlConnection } from './providers/mysql/connection'
+import { diffTableData, fetchTableRows } from './providers/mysql/data'
 import { introspectSchema, listTables } from './providers/mysql/introspect'
 import { diff } from '../shared/diff/engine'
 import { decryptPassword, encryptPassword } from './secrets'
@@ -152,5 +153,34 @@ export function registerIpc(): void {
   // ── update:install ─────────────────────────────────────────────────────
   handle('update:install', () => {
     autoUpdater.quitAndInstall()
+  })
+
+  // ── data:compare ───────────────────────────────────────────────────────────
+  handle('data:compare', async ({ sourceId, targetId, tableName, keyColumns, limit }) => {
+    const db = getDb()
+    const srcStored = db.data.connections.find((c) => c.id === sourceId)
+    const tgtStored = db.data.connections.find((c) => c.id === targetId)
+    if (!srcStored) throw new Error(`Connection not found: ${sourceId}`)
+    if (!tgtStored) throw new Error(`Connection not found: ${targetId}`)
+
+    const srcPw = decryptPassword(srcStored._encryptedPassword)
+    const tgtPw = decryptPassword(tgtStored._encryptedPassword)
+    const { _encryptedPassword: _a, ...srcConn } = srcStored
+    const { _encryptedPassword: _b, ...tgtConn } = tgtStored
+
+    const [srcResult, tgtResult] = await Promise.all([
+      fetchTableRows(srcConn, srcPw, tableName, limit),
+      fetchTableRows(tgtConn, tgtPw, tableName, limit)
+    ])
+
+    return diffTableData(
+      tableName,
+      srcResult.rows,
+      tgtResult.rows,
+      keyColumns,
+      limit,
+      srcResult.capped,
+      tgtResult.capped
+    )
   })
 }
