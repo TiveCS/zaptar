@@ -1,4 +1,5 @@
 import { clipboard, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { IpcChannel, IpcChannelMap } from '../shared/types'
@@ -146,5 +147,10 @@ export function registerIpc(): void {
   handle('script:copy', ({ script }) => {
     const sql = script.statements.map((s) => s.sql).join('\n\n')
     clipboard.writeText(sql)
+  })
+
+  // ── update:install ─────────────────────────────────────────────────────
+  handle('update:install', () => {
+    autoUpdater.quitAndInstall()
   })
 }

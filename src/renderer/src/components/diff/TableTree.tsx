@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, FileCode2, Minus, Plus, RefreshCw, Search } 
 import * as React from 'react'
 
 import type { SchemaDiff } from '@shared/types'
+import { useShortcut } from '@renderer/hooks/useShortcut'
 import { cn } from '@renderer/lib/utils'
 
 type Group = 'added' | 'modified' | 'removed' | 'unchanged'
@@ -104,6 +105,19 @@ export function TableTree({
   onViewChange
 }: Props): React.JSX.Element {
   const [search, setSearch] = React.useState('')
+  const searchRef = React.useRef<HTMLInputElement>(null)
+
+  // Ctrl+P — focus & select the search input (VS Code quick-open feel)
+  useShortcut([
+    {
+      key: 'p',
+      ctrl: true,
+      handler: () => {
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+  ])
 
   const totalChanges =
     diff.addedTables.length + diff.modifiedTables.length + diff.removedTables.length
@@ -136,8 +150,9 @@ export function TableTree({
         <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/40 px-2 py-1">
           <Search className="size-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
           <input
+            ref={searchRef}
             type="text"
-            placeholder="Search tables…"
+            placeholder="Search tables…  (Ctrl+P)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-transparent text-xs outline-none placeholder:text-[var(--color-muted-foreground)]/60"

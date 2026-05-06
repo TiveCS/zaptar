@@ -29,6 +29,11 @@ export type ZaptarApi = {
     save(script: MigrationScript): Promise<{ path: string | null }>
     copy(script: MigrationScript): Promise<void>
   }
+  update: {
+    onAvailable(cb: (version: string) => void): void
+    onDownloaded(cb: () => void): void
+    install(): Promise<void>
+  }
 }
 
 export const api: ZaptarApi = window.zaptar

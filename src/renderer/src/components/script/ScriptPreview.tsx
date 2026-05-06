@@ -3,6 +3,7 @@ import * as React from 'react'
 
 import type { MigrationScript, Statement } from '@shared/types'
 import { Button } from '@renderer/components/ui/button'
+import { useShortcut } from '@renderer/hooks/useShortcut'
 import { api } from '@renderer/lib/api'
 import { cn } from '@renderer/lib/utils'
 
@@ -179,6 +180,12 @@ export function ScriptPreview({ script }: Props): React.JSX.Element {
       showNotice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
+
+  // Ctrl+Shift+S — save,  Ctrl+Shift+C — copy
+  useShortcut([
+    { key: 's', ctrl: true, shift: true, handler: handleSave },
+    { key: 'c', ctrl: true, shift: true, handler: handleCopy }
+  ])
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

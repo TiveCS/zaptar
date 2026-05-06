@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@renderer/components/ui/select'
+import { useShortcut } from '@renderer/hooks/useShortcut'
 import { api } from '@renderer/lib/api'
 import { useStore } from '@renderer/store'
 
@@ -279,6 +280,23 @@ export function ComparePage(): React.JSX.Element {
 
   const canRun = !!sourceId && !!targetId && sourceId !== targetId && compareStatus !== 'loading'
   const showTableList = !!sourceId && sourceId !== targetId
+
+  // Ctrl+Enter — run compare
+  // Ctrl+Shift+X — swap source ↔ target
+  useShortcut([
+    { key: 'Enter', ctrl: true, handler: () => { if (canRun) handleRunCompare() } },
+    {
+      key: 'x',
+      ctrl: true,
+      shift: true,
+      handler: () => {
+        if (!sourceId && !targetId) return
+        const tmp = sourceId
+        setSourceId(targetId)
+        setTargetId(tmp)
+      }
+    }
+  ])
 
   return (
     <div className="flex h-full flex-col">

@@ -6,6 +6,7 @@ import { Button } from '@renderer/components/ui/button'
 import { DiffPanel } from '@renderer/components/diff/DiffPanel'
 import { TableTree } from '@renderer/components/diff/TableTree'
 import { ScriptPreview } from '@renderer/components/script/ScriptPreview'
+import { useShortcut } from '@renderer/hooks/useShortcut'
 import { useStore } from '@renderer/store'
 import { cn } from '@renderer/lib/utils'
 
@@ -35,6 +36,47 @@ export function ResultPage(): React.JSX.Element {
     setSelectedTable(name)
     setView('diff')
   }
+
+  // Flat ordered list matching tree order for keyboard navigation
+  const allTables = diff
+    ? [
+        ...diff.addedTables.map((t) => t.name),
+        ...diff.modifiedTables.map((t) => t.name),
+        ...diff.removedTables.map((t) => t.name),
+        ...diff.unchangedTables
+      ]
+    : []
+
+  useShortcut([
+    // Ctrl+ArrowDown — next table
+    {
+      key: 'ArrowDown',
+      ctrl: true,
+      handler: () => {
+        if (allTables.length === 0) return
+        const idx = selectedTable ? allTables.indexOf(selectedTable) : -1
+        const next = allTables[Math.min(idx + 1, allTables.length - 1)]
+        if (next) handleSelect(next)
+      }
+    },
+    // Ctrl+ArrowUp — previous table
+    {
+      key: 'ArrowUp',
+      ctrl: true,
+      handler: () => {
+        if (allTables.length === 0) return
+        const idx = selectedTable ? allTables.indexOf(selectedTable) : allTables.length
+        const prev = allTables[Math.max(idx - 1, 0)]
+        if (prev) handleSelect(prev)
+      }
+    },
+    // Ctrl+` — toggle diff / script view
+    {
+      key: '`',
+      ctrl: true,
+      handler: () => setView((v) => (v === 'script' ? 'diff' : 'script'))
+    }
+  ])
 
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!diff || !script) {

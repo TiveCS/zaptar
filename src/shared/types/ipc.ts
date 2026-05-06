@@ -26,6 +26,8 @@ export type IpcChannelMap = {
 
   'script:save': { req: { script: MigrationScript }; res: { path: string | null } }
   'script:copy': { req: { script: MigrationScript }; res: void }
+
+  'update:install': { req: void; res: void }
 }
 
 export type IpcChannel = keyof IpcChannelMap

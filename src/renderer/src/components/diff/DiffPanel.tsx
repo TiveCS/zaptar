@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import type { Change, FieldDiff, SchemaDiff, TableDiff } from '@shared/types'
 import type { CheckConstraint, Column, ForeignKey, Index, Table } from '@shared/types/schema'
+import { useShortcut } from '@renderer/hooks/useShortcut'
 import { cn } from '@renderer/lib/utils'
 import { api } from '@renderer/lib/api'
 
@@ -446,6 +447,15 @@ const SECTIONS: { key: Section; label: string }[] = [
 
 export function DiffPanel({ diff, tableName, sourceId }: Props): React.JSX.Element {
   const [section, setSection] = React.useState<Section>('columns')
+
+  // Ctrl+1-5 — switch section tabs (matches VS Code panel tab shortcuts)
+  useShortcut([
+    { key: '1', ctrl: true, handler: () => setSection('columns') },
+    { key: '2', ctrl: true, handler: () => setSection('indexes') },
+    { key: '3', ctrl: true, handler: () => setSection('fks') },
+    { key: '4', ctrl: true, handler: () => setSection('checks') },
+    { key: '5', ctrl: true, handler: () => setSection('options') }
+  ])
 
   // Classify the table
   const addedTable = diff.addedTables.find((t) => t.name === tableName)

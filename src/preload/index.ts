@@ -38,6 +38,15 @@ const zaptar = {
     save: (script: MigrationScript): Promise<{ path: string | null }> =>
       ipcRenderer.invoke('script:save', { script }),
     copy: (script: MigrationScript): Promise<void> => ipcRenderer.invoke('script:copy', { script })
+  },
+  update: {
+    onAvailable: (cb: (version: string) => void): void => {
+      ipcRenderer.on('update:available', (_, info: { version: string }) => cb(info.version))
+    },
+    onDownloaded: (cb: () => void): void => {
+      ipcRenderer.on('update:downloaded', () => cb())
+    },
+    install: (): Promise<void> => ipcRenderer.invoke('update:install')
   }
 } as const
 
