@@ -243,6 +243,20 @@ export function DataTablePanel({
   const [sqlOpen, setSqlOpen] = React.useState(false)
   const [sqlModalOpen, setSqlModalOpen] = React.useState(false)
   const [notice, setNotice] = React.useState<{ text: string; kind: 'success' | 'error' } | null>(null)
+  const noticeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Tracks the most recent in-flight `data:compare` request so a slow response
+  // from a prior load attempt cannot overwrite a newer one. Incremented on each
+  // call; only matching IDs commit the result.
+  const requestIdRef = React.useRef(0)
+
+  // Clear any pending notice timer when the component unmounts so we don't
+  // call setNotice on an unmounted component.
+  React.useEffect(() => {
+    return () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    }
+  }, [])
 
   // Auto-select primary key when table schema arrives
   React.useEffect(() => {
@@ -263,8 +277,12 @@ export function DataTablePanel({
   }, [tableName])
 
   function showNotice(text: string, kind: 'success' | 'error', ms = 3000): void {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
     setNotice({ text, kind })
-    setTimeout(() => setNotice(null), ms)
+    noticeTimer.current = setTimeout(() => {
+      setNotice(null)
+      noticeTimer.current = null
+    }, ms)
   }
 
   function toggleKey(col: string): void {
@@ -275,12 +293,17 @@ export function DataTablePanel({
 
   async function handleLoad(): Promise<void> {
     if (keyColumns.length === 0) return
+    // Issue a fresh request id so any in-flight prior call is shadowed
+    const myId = ++requestIdRef.current
     setLoadState({ status: 'loading' })
     try {
       const result = await api.data.compare(sourceId, targetId, tableName, keyColumns, limit)
+      // Only commit if no newer request superseded us
+      if (myId !== requestIdRef.current) return
       setLoadState({ status: 'loaded', diff: result })
       setSqlOpen(false)
     } catch (err) {
+      if (myId !== requestIdRef.current) return
       setLoadState({
         status: 'error',
         message: err instanceof Error ? err.message : String(err)
@@ -529,15 +552,32 @@ export function DataTablePanel({
               </span>
             )}
 
-            {/* Data sync SQL actions — deliberately separate from schema script */}
-            <Button variant="outline" size="sm" onClick={handleSave}>
-              <Save className="size-3.5" />
-              Save data sync .sql
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleCopy}>
-              <Copy className="size-3.5" />
-              Copy
-            </Button>
+            {/* Data sync SQL actions — deliberately separate from schema script.
+                When filter chips hide a row type, the generated SQL also omits
+                those statements; surfaces this as a `(filtered)` suffix and
+                tooltip so the user is not surprised by missing statements. */}
+            {(() => {
+              const filterActive = !filter.showAdded || !filter.showRemoved || !filter.showModified
+              const hiddenKinds: string[] = []
+              if (!filter.showAdded) hiddenKinds.push('INSERT')
+              if (!filter.showRemoved) hiddenKinds.push('DELETE')
+              if (!filter.showModified) hiddenKinds.push('UPDATE')
+              const tip = filterActive
+                ? `Filter active — generated SQL excludes: ${hiddenKinds.join(', ')}`
+                : undefined
+              return (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleSave} title={tip}>
+                    <Save className="size-3.5" />
+                    Save data sync .sql{filterActive && ' (filtered)'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleCopy} title={tip}>
+                    <Copy className="size-3.5" />
+                    Copy{filterActive && ' (filtered)'}
+                  </Button>
+                </>
+              )
+            })()}
           </div>
 
           {/* Cap warning */}
@@ -605,6 +645,14 @@ export function DataTablePanel({
                   <span className="rounded-full bg-[var(--color-muted)] px-1.5 py-0.5 text-[11px] text-[var(--color-muted-foreground)]">
                     INSERT / UPDATE / DELETE — separate from schema migration
                   </span>
+                  {(!filter.showAdded || !filter.showRemoved || !filter.showModified) && (
+                    <span
+                      title="Filter active — some statement kinds excluded"
+                      className="rounded-full bg-[var(--color-diff-modified-bg)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-diff-modified)]"
+                    >
+                      filtered
+                    </span>
+                  )}
                 </div>
                 {notice && (
                   <span className={cn(
