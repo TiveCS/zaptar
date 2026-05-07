@@ -12,9 +12,14 @@
 - Built-in zoom, pan, minimap, and zoom controls (mousewheel + drag, or use the on-canvas controls)
 - **Lazy table selection** — initial canvas is empty; pick tables of interest from the sidebar. Avoids a freeze when loading databases with hundreds of tables
 - **"+ neighbors" button** — one click adds a table together with every table connected to it via FK (1 hop in either direction), so you can explore a subgraph quickly
-- **Crow's foot cardinality markers** — each FK edge shows `1:1` or `N:1` based on whether the FK column is unique-covered, with crow's foot SVG markers at both endpoints
-- **Smart edge routing + hover highlight** — smoothstep paths bend around nodes instead of crossing through them; hovering an edge animates it, brings it to front, fades the others, and reveals the `ON DELETE` action
+- **Jump to table** — clicking a table name in the sidebar adds it to the canvas (if missing) and pans / zooms the viewport to center on it. Repeated clicks re-center even if the table was already focused.
+- **Crow's foot cardinality markers** — each FK edge shows `N child → 1 parent` or `1 child → 1 parent` with crow's foot SVG markers at the child end and a double-bar at the parent end. Cardinality is detected from the FK column set: covered by a primary / unique index → 1:1, otherwise N:1.
+- **Smart edge routing + hover highlight** — smoothstep paths bend around nodes instead of crossing through them; hovering an edge animates it, brings it to front (z-index), fades the others to 25% opacity, and reveals the `ON DELETE` action when not the default
 - **Per-relation colors** — each FK edge gets a stable color from a 7-shade palette so overlapping lines are easier to follow
+- **Column constraints surfaced on each row** — every column row now shows a `NULL` badge if nullable and a `= value` badge for non-null defaults; a tooltip on hover gives the full type / nullability / default / comment
+- **Dynamic table-node width** — each node sizes itself to its longest header / column-row content (260 – 460 px), so long table names and verbose types no longer truncate to ellipsis
+- **Performance** — node layout (dagre) and edge styling are memoized separately so hovering an edge re-derives only the styling pass; the previous full-graph rebuild caused a visible 2-frame blink on hover
+- **Dark canvas** — `colorMode="dark"` on `<ReactFlow>` plus CSS overrides align Controls / MiniMap / Background with the app theme
 - ERD is independent of the schema diff workflow; loading an ERD does not affect any active comparison
 
 ### Fixes
@@ -32,6 +37,9 @@
 
 ### A11y
 - **Data sync SQL modal** — added `role="dialog"`, `aria-modal`, `autoFocus`, and Escape-to-close keyboard handler
+
+### Build
+- Linux release job now pins `ubuntu-22.04` and explicitly installs `libfuse2`, `fakeroot`, and `dpkg` so AppImage and `.deb` builds succeed. Was failing since `ubuntu-latest` rolled to 24.04 which dropped `libfuse2`
 
 ---
 
