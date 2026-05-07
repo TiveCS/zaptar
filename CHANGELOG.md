@@ -10,7 +10,11 @@
 - Primary-key columns highlighted with a key icon; foreign-key columns marked with a link icon
 - Auto-layout via dagre — referenced (parent) tables appear on the left, referencing tables on the right
 - Built-in zoom, pan, minimap, and zoom controls (mousewheel + drag, or use the on-canvas controls)
-- Left sidebar table filter with search — toggle individual tables, "All / None" buttons, edges to filtered-out tables are hidden
+- **Lazy table selection** — initial canvas is empty; pick tables of interest from the sidebar. Avoids a freeze when loading databases with hundreds of tables
+- **"+ neighbors" button** — one click adds a table together with every table connected to it via FK (1 hop in either direction), so you can explore a subgraph quickly
+- **Crow's foot cardinality markers** — each FK edge shows `1:1` or `N:1` based on whether the FK column is unique-covered, with crow's foot SVG markers at both endpoints
+- **Smart edge routing + hover highlight** — smoothstep paths bend around nodes instead of crossing through them; hovering an edge animates it, brings it to front, fades the others, and reveals the `ON DELETE` action
+- **Per-relation colors** — each FK edge gets a stable color from a 7-shade palette so overlapping lines are easier to follow
 - ERD is independent of the schema diff workflow; loading an ERD does not affect any active comparison
 
 ### Fixes

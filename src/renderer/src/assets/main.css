@@ -82,3 +82,51 @@ body {
   -webkit-font-smoothing: antialiased;
   margin: 0;
 }
+
+/* ── React Flow dark-theme overrides ───────────────────────────────────────
+   The library ships with a light-mode default for Controls and MiniMap.
+   Without these overrides the zoom buttons render as a bright white box
+   on top of the dark canvas. */
+.react-flow__controls {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  background-color: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  fill: var(--color-foreground);
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--color-accent);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__minimap {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgb(0 0 0 / 0.45);
+}
+
+.react-flow__attribution {
+  background-color: transparent;
+}
+
+.react-flow__edge-text {
+  fill: var(--color-foreground);
+}
+
+.react-flow__edge-textbg {
+  fill: var(--color-card);
+}

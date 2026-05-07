@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, Play, Search, Workflow } from 'lucide-react'
+import { AlertCircle, GitBranch, Loader2, Play, Search, Workflow } from 'lucide-react'
 import * as React from 'react'
 
 import type { Schema } from '@shared/types/schema'
@@ -39,6 +39,10 @@ export function ErdPage(): React.JSX.Element {
   const [loadState, setLoadState] = React.useState<LoadState>({ status: 'idle' })
   const [selectedTables, setSelectedTables] = React.useState<Set<string>>(new Set())
   const [search, setSearch] = React.useState('')
+  // Focus state — name + monotonically increasing nonce so clicking the same
+  // table twice still re-centers the canvas. The nonce makes the prop value
+  // change even when the table name doesn't.
+  const [focus, setFocus] = React.useState<{ table: string; nonce: number } | null>(null)
 
   // Track latest in-flight introspect so a stale response cannot overwrite a
   // newer one if the user changes connection mid-fetch.
@@ -56,7 +60,10 @@ export function ErdPage(): React.JSX.Element {
       const schema = await api.schema.introspect(connectionId)
       if (myId !== requestIdRef.current) return
       setLoadState({ status: 'loaded', schema })
-      setSelectedTables(new Set(schema.tables.map((t) => t.name)))
+      // Start with empty selection — selecting all tables for a 500+ table
+      // database freezes the renderer while React Flow paints every node.
+      // User picks tables of interest from the sidebar.
+      setSelectedTables(new Set())
     } catch (err) {
       if (myId !== requestIdRef.current) return
       setLoadState({
@@ -64,6 +71,36 @@ export function ErdPage(): React.JSX.Element {
         message: err instanceof Error ? err.message : String(err)
       })
     }
+  }
+
+  /**
+   * Ensure the table is selected, then jump the canvas to center on it.
+   * Used when the user clicks a table name in the sidebar.
+   */
+  function jumpToTable(name: string): void {
+    setSelectedTables((prev) => (prev.has(name) ? prev : new Set([...prev, name])))
+    setFocus((prev) => ({ table: name, nonce: (prev?.nonce ?? 0) + 1 }))
+  }
+
+  /**
+   * Add a table plus all tables connected via FK (1 hop in either direction).
+   * Helpful when the user clicks one table and wants to see its immediate
+   * relationships without manually checking every related box.
+   */
+  function selectWithNeighbors(name: string): void {
+    if (loadState.status !== 'loaded') return
+    const tables = loadState.schema.tables
+    const target = tables.find((t) => t.name === name)
+    if (!target) return
+    const next = new Set(selectedTables)
+    next.add(name)
+    // Outgoing FKs (this table → others)
+    for (const fk of target.foreignKeys) next.add(fk.referencedTable)
+    // Incoming FKs (other tables → this one)
+    for (const t of tables) {
+      if (t.foreignKeys.some((fk) => fk.referencedTable === name)) next.add(t.name)
+    }
+    setSelectedTables(next)
   }
 
   function toggleTable(name: string): void {
@@ -231,29 +268,51 @@ export function ErdPage(): React.JSX.Element {
                 </p>
               ) : (
                 visibleTables.map((t) => (
-                  <label
+                  <div
                     key={t.name}
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 px-3 py-1 text-sm transition-colors hover:bg-[var(--color-accent)]/60',
+                      'group flex items-center gap-1 px-3 py-1 text-sm transition-colors hover:bg-[var(--color-accent)]/60',
                       selectedTables.has(t.name) ? 'opacity-100' : 'opacity-60'
                     )}
                   >
+                    {/* Checkbox toggles selection (shows/hides on canvas) */}
                     <input
                       type="checkbox"
                       checked={selectedTables.has(t.name)}
                       onChange={() => toggleTable(t.name)}
-                      className="rounded"
+                      className="shrink-0 rounded"
+                      title="Show on canvas"
                     />
-                    <span className="truncate font-mono text-xs">{t.name}</span>
-                  </label>
+                    {/* Name click jumps to the table on the canvas */}
+                    <button
+                      onClick={() => jumpToTable(t.name)}
+                      title="Jump to this table on the canvas"
+                      className="flex-1 truncate text-left font-mono text-xs hover:text-[var(--color-diff-modified)]"
+                    >
+                      {t.name}
+                    </button>
+                    {/* + neighbors — add this table together with FK-connected ones */}
+                    <button
+                      onClick={() => selectWithNeighbors(t.name)}
+                      title="Add this table + its FK neighbors"
+                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)] group-hover:opacity-100"
+                    >
+                      <GitBranch className="size-3" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
           </aside>
 
-          {/* Right — canvas */}
+          {/* Right — canvas. focus prop carries the table name plus a nonce so
+              clicking the same row twice still re-centers the canvas. */}
           <div className="overflow-hidden">
-            <ErdCanvas tables={tables} selectedTables={selectedTables} />
+            <ErdCanvas
+              tables={tables}
+              selectedTables={selectedTables}
+              focusTable={focus ? `${focus.table}#${focus.nonce}` : null}
+            />
           </div>
 
           {/* Hidden a11y checkbox */}
