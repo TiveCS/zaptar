@@ -40,6 +40,14 @@ export type IpcChannelMap = {
     }
     res: DataTableDiff
   }
+
+  // Save data sync SQL (INSERT/UPDATE/DELETE) — kept distinct from script:save
+  // so the two never share a code path. Schema and data scripts are different
+  // tooling with different review semantics.
+  'data:save-sql': {
+    req: { sql: string; defaultName: string }
+    res: { path: string | null }
+  }
 }
 
 export type IpcChannel = keyof IpcChannelMap

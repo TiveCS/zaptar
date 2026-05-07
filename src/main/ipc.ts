@@ -183,4 +183,24 @@ export function registerIpc(): void {
       tgtResult.capped
     )
   })
+
+  // ── data:save-sql ─────────────────────────────────────────────────────────
+  // Dedicated handler for data sync SQL. Deliberately distinct from
+  // `script:save` so the two pipelines cannot drift into each other. Accepts
+  // a raw SQL string and a suggested filename.
+  handle('data:save-sql', async ({ sql, defaultName }) => {
+    const result = await dialog.showSaveDialog({
+      title: 'Save data sync SQL',
+      defaultPath: defaultName,
+      filters: [{ name: 'SQL files', extensions: ['sql'] }]
+    })
+    if (result.canceled || !result.filePath) return { path: null }
+    const { writeFileSync } = await import('fs')
+    try {
+      writeFileSync(result.filePath, sql, 'utf8')
+    } catch (err) {
+      throw new Error(`Failed to write file: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    return { path: result.filePath }
+  })
 }

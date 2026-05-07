@@ -57,7 +57,9 @@ const zaptar = {
       keyColumns: string[],
       limit: number
     ): Promise<DataTableDiff> =>
-      ipcRenderer.invoke('data:compare', { sourceId, targetId, tableName, keyColumns, limit })
+      ipcRenderer.invoke('data:compare', { sourceId, targetId, tableName, keyColumns, limit }),
+    saveSql: (sql: string, defaultName: string): Promise<{ path: string | null }> =>
+      ipcRenderer.invoke('data:save-sql', { sql, defaultName })
   }
 } as const
 

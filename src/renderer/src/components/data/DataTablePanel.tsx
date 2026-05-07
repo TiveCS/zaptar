@@ -326,21 +326,9 @@ export function DataTablePanel({
     if (loadState.status !== 'loaded') return
     const sql = generateDataSyncSql(loadState.diff, skipKeyInInsert, filter)
     try {
-      // Reuse script:save IPC — it only uses statements[].sql, so other fields are stubs
-      const result = await api.script.save({
-        generatedAt: new Date().toISOString(),
-        source: { databaseName: tableName },
-        target: { databaseName: tableName },
-        statements: [{
-          id: 'data-sync',
-          kind: 'preamble',
-          sql,
-          tableName,
-          destructive: false,
-          note: 'data sync'
-        }],
-        warnings: []
-      })
+      // Dedicated data:save-sql IPC — no longer reuses the schema migration
+      // save channel, so DDL and DML never share a code path.
+      const result = await api.data.saveSql(sql, `data-sync-${tableName}-${Date.now()}.sql`)
       if (result.path) showNotice(`Saved to ${result.path}`, 'success', 4000)
     } catch (err) {
       showNotice(`Save failed: ${err instanceof Error ? err.message : String(err)}`, 'error')

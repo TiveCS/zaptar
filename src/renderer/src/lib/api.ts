@@ -43,6 +43,7 @@ export type ZaptarApi = {
       keyColumns: string[],
       limit: number
     ): Promise<DataTableDiff>
+    saveSql(sql: string, defaultName: string): Promise<{ path: string | null }>
   }
 }
 
