@@ -44,9 +44,14 @@ export function DataDiffView({ diff, sourceId, targetId }: Props): React.JSX.Ele
   const q = search.trim().toLowerCase()
   const tables = q ? allTables.filter((t) => t.name.toLowerCase().includes(q)) : allTables
 
-  // When user selects a table, resolve its schema for the key picker
+  // When user selects a table, resolve its schema for the key picker.
+  // The cleanup-scoped `cancelled` flag guards against a race where the
+  // user switches tables before a slow `api.compare.table` call resolves —
+  // without this, the late response can overwrite the schema for a table
+  // the user is no longer viewing.
   React.useEffect(() => {
     if (!selectedTable) return
+    let cancelled = false
 
     setTableSchema(null)
 
@@ -75,9 +80,11 @@ export function DataDiffView({ diff, sourceId, targetId }: Props): React.JSX.Ele
     setTableSchemaLoading(true)
     api.compare
       .table(sourceId, selectedTable)
-      .then((t) => setTableSchema(t))
-      .catch(() => setTableSchema(null))
-      .finally(() => setTableSchemaLoading(false))
+      .then((t) => { if (!cancelled) setTableSchema(t) })
+      .catch(() => { if (!cancelled) setTableSchema(null) })
+      .finally(() => { if (!cancelled) setTableSchemaLoading(false) })
+
+    return () => { cancelled = true }
   }, [selectedTable, diff, sourceId])
 
   return (
