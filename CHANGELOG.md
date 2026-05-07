@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.1 — Unreleased
+
+### Style
+- **Themed scrollbars** — Chromium's default white-track / gray-thumb scrollbar replaced with a dark variant that matches the app palette. Width stays close to the OS default for hit-testability; thumb floats with a 3 px transparent inner border, hover and active states bump the thumb shade.
+
+---
+
 ## v1.2.0
 
 ### Features
