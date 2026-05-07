@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.2.0
+
+### Features
+
+#### ERD Viewer (new tooling)
+- New **ERD** page on the main nav — visualize a database as an interactive entity-relationship diagram for any saved connection
+- Tables render as nodes with full column list; foreign keys render as edges between the referencing column and the referenced column
+- Primary-key columns highlighted with a key icon; foreign-key columns marked with a link icon
+- Auto-layout via dagre — referenced (parent) tables appear on the left, referencing tables on the right
+- Built-in zoom, pan, minimap, and zoom controls (mousewheel + drag, or use the on-canvas controls)
+- Left sidebar table filter with search — toggle individual tables, "All / None" buttons, edges to filtered-out tables are hidden
+- ERD is independent of the schema diff workflow; loading an ERD does not affect any active comparison
+
+### Fixes
+- **Data comparison: SQL injection guard** — table names are validated for illegal characters (backticks, quotes, whitespace, NUL) before being interpolated into the `SELECT` statement
+- **Data comparison: column union** — column list now derived from a union of keys across all rows, not just `rows[0]`. Sparse / nullable columns no longer dropped from the diff
+- **Data comparison: boolean compare** — BIT / TINYINT(1) values are normalized to `0 / 1` before equality check, eliminating false-positive modified rows when the mysql2 driver returns the same value as different JS types
+- **Data panel: timer leak** — `showNotice` no longer stacks `setTimeout` calls. Pending timers are cleared on unmount
+- **Data panel: race condition** — clicking Load multiple times in quick succession now ignores stale responses; only the latest request commits its result
+- **Data panel: silent filter** — Save / Copy buttons append `(filtered)` and a tooltip when any row-type chip is hidden, surfacing that the saved SQL excludes some statements
+- **Data diff view: stale schema fetch** — switching between unchanged tables faster than the schema fetch resolves no longer overwrites the column picker with a stale schema
+- **SQL highlight: `''` escape** — string-literal tokenizer now handles the SQL-standard doubled-quote escape (e.g. `'it''s a value'`); previously broke the highlighter on any apostrophe-containing string
+
+### Refactoring
+- **Dedicated `data:save-sql` IPC** — saving the data sync SQL no longer reuses the schema migration `script:save` handler with a stub `MigrationScript`. The two pipelines are fully decoupled.
+
+### A11y
+- **Data sync SQL modal** — added `role="dialog"`, `aria-modal`, `autoFocus`, and Escape-to-close keyboard handler
+
+---
+
 ## v1.1.0
 
 ### Features
