@@ -1,4 +1,4 @@
-import { Database, GitCompare, Network } from 'lucide-react'
+import { Database, GitCompare, Network, Workflow } from 'lucide-react'
 import * as React from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
@@ -9,7 +9,8 @@ import { cn } from '@renderer/lib/utils'
 const navItems = [
   { to: '/connections', label: 'Connections', icon: Network },
   { to: '/compare', label: 'Compare', icon: GitCompare },
-  { to: '/result', label: 'Result', icon: Database }
+  { to: '/result', label: 'Result', icon: Database },
+  { to: '/erd', label: 'ERD', icon: Workflow }
 ] as const
 
 export function Layout(): React.JSX.Element {

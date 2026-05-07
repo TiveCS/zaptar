@@ -2,7 +2,7 @@ import type { Connection, ConnectionDraft, ConnectionTestResult } from './connec
 import type { DataTableDiff } from './data'
 import type { SchemaDiff } from './diff'
 import type { MigrationScript } from './script'
-import type { Table } from './schema'
+import type { Schema, Table } from './schema'
 
 export type IpcChannelMap = {
   'connection:list': { req: void; res: Connection[] }
@@ -23,6 +23,13 @@ export type IpcChannelMap = {
   'compare:table': {
     req: { connectionId: string; tableName: string }
     res: Table | null
+  }
+
+  // Full schema introspection for one connection — drives the ERD viewer.
+  // Returns every table with full structure (columns, indexes, FKs, checks).
+  'schema:introspect': {
+    req: { connectionId: string }
+    res: Schema
   }
 
   'script:save': { req: { script: MigrationScript }; res: { path: string | null } }
