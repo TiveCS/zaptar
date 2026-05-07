@@ -1,51 +1,60 @@
 # zaptar — Schema Diff Desktop App
 
-**Status:** Approved proposal, not yet implemented
-**Target version:** v0.1 (MVP)
-**Working directory:** `D:\Work\Rehoukrel\zaptar` (currently empty)
-**Last updated:** 2026-05-03
+**Status:** Living spec — reflects current shipped state of `main`
+**Latest released version:** v1.2.0 (in publish pipeline at time of last edit)
+**In-progress version:** v1.2.1 (themed scrollbars, ERD export — already on `main`)
+**Last updated:** 2026-05-07
+
+This document is the canonical project specification. It evolves with the
+codebase: every section describes the **shipped** behavior, not aspirations.
+Future-work items live in their own clearly labelled section at the bottom.
 
 ---
 
 ## 1. Executive summary
 
-`zaptar` is a desktop application that compares the **schemas** of two relational databases (e.g. `dev` vs `prod`), shows the differences in a **git-diff-style side-by-side view**, and generates a **single, ordered SQL migration script** that, when run against the older database, brings it in line with the newer one.
+`zaptar` is a cross-platform desktop application for working with **MySQL / MariaDB** databases. It is built around three independent tools, each available from the main nav:
+
+1. **Schema comparison** — pick a source (newer) and target (older) database; see a per-table side-by-side diff with field-level highlights; export a single ordered SQL migration script that brings the target up to source.
+2. **Data comparison** — for any selected table on the Result page, fetch rows from both sides and produce a row-level diff (added / modified / removed) plus a separate INSERT / UPDATE / DELETE data-sync SQL script. Built for config/settings tables that live in the database alongside schema.
+3. **ERD viewer** — visualize a single database as an interactive entity-relationship diagram. Tables render as nodes with full column lists; foreign keys render as edges with crow's-foot cardinality markers. Lazy table selection, jump-to-table, and PNG / SVG export are first-class.
 
 The primary user is a backend developer or DBA who:
 
 - Maintains parallel database environments (dev / staging / prod)
-- Needs to keep prod schema reflective of dev after development cycles
-- Is tired of writing migration SQL by hand or running brittle "compare" wizards in heavyweight GUIs
+- Wants to keep prod schema and config tables reflective of dev after development cycles
+- Needs to explain the schema shape to a non-DB audience without dragging out a heavyweight GUI
 
-MVP supports **MariaDB / MySQL**. The architecture is built around a `SchemaProvider` interface so PostgreSQL, SQLite, etc. can be added later without touching the diff engine or UI.
+The architecture uses a `SchemaProvider` interface so PostgreSQL, SQLite, etc. can be added later without touching the diff engine or UI. Today `mysql` is the only implementation.
 
 ---
 
 ## 2. Goals and non-goals
 
-### 2.1 Goals (MVP)
+### 2.1 Shipped (achieved)
 
-1. Visually compare two MySQL/MariaDB schemas with **per-table side-by-side diff** that uses git-diff conventions (red=removed, green=added, yellow=modified).
-2. Detect changes at the level of **tables, columns, indexes, foreign keys, check constraints, and table options** (engine, charset, collation, comment).
-3. Allow the user to pick which tables to compare. Default = all.
-4. Produce **one consolidated SQL migration script** for the entire diff (not per-table). The script must be safe-by-construction in the sense that statement ordering avoids dependency violations (FKs dropped before tables they reference, new tables created before their FKs are added, etc.).
-5. Flag destructive statements (`DROP TABLE`, `DROP COLUMN`, narrowing type changes) prominently in both UI and the generated script.
-6. Save / copy the script to the clipboard or to a `.sql` file. **No in-app execution in v0.1.**
-7. Save reusable connection profiles, with credentials stored in the OS keychain (not on disk in plaintext).
-8. Be lightweight: fast cold-start, low RAM footprint, single-window app.
-9. Cross-platform: Windows + macOS + Linux.
+1. **Schema comparison** with per-table side-by-side diff, git-diff conventions (red=removed, green=added, yellow=modified). Detects tables, columns, indexes, foreign keys, check constraints, and table options (engine, charset, collation, comment, `AUTO_INCREMENT`, `ROW_FORMAT`).
+2. **Per-table sub-tabs** — Columns / Indexes / Foreign Keys / Check Constraints / Table Options — keyboard-shortcut switchable.
+3. **Migration script** — one consolidated, safe-by-construction SQL script. Statement ordering respects dependencies (FKs dropped before referenced tables, new tables created before their FKs are added). Destructive statements flagged in both UI and script. Saved / copied via OS dialogs.
+4. **Custom SQL highlighter** (VS Code Dark+ palette, no external dependency) with the SQL-standard `''` escape supported.
+5. **Data comparison (v1.1.0)** — on-demand row-level diff per table from the Result page Data tab. User picks match key columns (primary key auto-suggested) and a row limit. Generates separate INSERT / UPDATE / DELETE data-sync SQL with `Skip key columns in INSERT` for PK-conflict scenarios. Filter chips toggle row types (added / removed / modified) and the same filter drives the generated SQL.
+6. **ERD viewer (v1.2.0)** — full database visualization for any saved connection. Crow's-foot cardinality markers, smoothstep edge routing, per-relation colors, hover highlight, lazy table selection, jump-to-table from sidebar, dynamic per-node width, NULL / DEFAULT badges per column, PNG / SVG export.
+7. **Connection management** — multiple saved connections, OS-keychain-encrypted passwords, test from form, duplicate, edit-without-rewrite-password.
+8. **Compare workflow extras** — source ↔ target swap, table-list filter, change-count badges, virtualized 500+ table sidebar.
+9. **Auto-update** via `electron-updater` (notifies on launch, downloads in background, restart-to-update banner).
+10. **Cross-platform** — Windows NSIS, macOS DMG, Linux AppImage / deb (snap available locally).
 
-### 2.2 Non-goals (v0.1 — explicitly deferred)
+### 2.2 Non-goals (still out of scope)
 
-- Executing the migration script from inside the app
-- Comparing **data** (row contents)
+- Executing the migration or data-sync script from inside the app
 - Comparing **stored procedures, functions, triggers, views, events, partitions**
 - Schema history / snapshots / time-travel diff
-- PostgreSQL, SQLite, SQL Server, Oracle providers
+- PostgreSQL, SQLite, SQL Server, Oracle providers (the `SchemaProvider` interface is ready; no implementation yet)
 - Multi-tab / multi-workspace UI
 - Schema versioning integration with migration tools (Flyway, Liquibase, Alembic, etc.)
+- Realtime collaborative editing of the migration script
 
-These are kept out of v0.1 deliberately. The architecture leaves room for them.
+These are kept out deliberately. The architecture leaves room for them.
 
 ---
 
@@ -153,102 +162,83 @@ A small ESLint rule (`import/no-restricted-paths` or `no-restricted-imports`) wi
 
 ---
 
-## 5. Project structure
+## 5. Project structure (current layout on `main`)
 
 ```
 zaptar/
 ├── package.json
 ├── pnpm-lock.yaml
-├── electron.vite.config.ts        # 3 build targets: main, preload, renderer
-├── tsconfig.json                  # base
-├── tsconfig.node.json             # main + preload
-├── tsconfig.web.json              # renderer
-├── electron-builder.yml           # packaging config
-├── components.json                # shadcn config
-├── index.html                     # renderer entry
+├── electron.vite.config.ts          # 3 build targets: main, preload, renderer
+├── tsconfig.json / .node.json / .web.json
+├── electron-builder.yml             # packaging config
+├── components.json                  # shadcn config
 ├── README.md
-├── PROPOSAL.md                    # this file
+├── CHANGELOG.md
+├── PROPOSAL.md                      # this file
+├── .github/workflows/release.yml    # CI: builds installers on `v*` tags
 │
-├── electron/
-│   ├── main/
-│   │   ├── index.ts               # app lifecycle, BrowserWindow, menu
-│   │   ├── ipc.ts                 # IPC handler registry
-│   │   ├── secrets.ts             # keytar wrapper
-│   │   ├── store.ts               # lowdb wrapper for connection list
-│   │   ├── files.ts               # save .sql dialog wrappers
-│   │   └── providers/
-│   │       ├── registry.ts        # providerById('mysql') → MySQLProvider
-│   │       └── mysql/
-│   │           ├── index.ts       # implements SchemaProvider
-│   │           ├── introspect.ts  # information_schema queries
-│   │           ├── emit-sql.ts    # SchemaDiff → MigrationScript
-│   │           ├── format-ddl.ts  # Column → "VARCHAR(64) NOT NULL ..."
-│   │           └── identifiers.ts # backtick-quoting, escaping
-│   ├── preload/
-│   │   └── index.ts               # contextBridge.exposeInMainWorld('zaptar', ...)
-│   └── env.d.ts                   # ambient types
+├── src/main/                        # Electron main process
+│   ├── index.ts                     # app lifecycle, BrowserWindow, auto-update wiring
+│   ├── ipc.ts                       # all IPC channel handlers
+│   ├── secrets.ts                   # password encrypt/decrypt via OS keychain
+│   ├── store.ts                     # lowdb wrapper for connection list
+│   └── providers/mysql/
+│       ├── connection.ts            # mysql2 connect + ping for test
+│       ├── introspect.ts            # information_schema queries → Schema
+│       ├── emit-sql.ts              # SchemaDiff → MigrationScript
+│       └── data.ts                  # row-level fetch + diffTableData (data comparison)
 │
-├── shared/
+├── src/preload/
+│   └── index.ts                     # contextBridge.exposeInMainWorld('zaptar', api)
+│
+├── src/shared/                      # Pure TS, importable from main + renderer
 │   ├── types/
-│   │   ├── connection.ts          # Connection, ConnectionDraft
-│   │   ├── schema.ts              # Schema, Table, Column, Index, ForeignKey, ...
-│   │   ├── diff.ts                # SchemaDiff, TableDiff, Change, FieldDiff
-│   │   ├── script.ts              # MigrationScript, Statement
-│   │   └── ipc.ts                 # IPC channel name + payload contracts
-│   ├── diff/
-│   │   └── engine.ts              # PURE: diff(source, target): SchemaDiff
-│   ├── provider.ts                # SchemaProvider interface
-│   └── format/
-│       └── ddl.ts                 # provider-agnostic helpers (e.g. textual diff of two strings)
+│   │   ├── connection.ts
+│   │   ├── schema.ts                # Schema, Table, Column, Index, ForeignKey, ...
+│   │   ├── diff.ts                  # SchemaDiff, TableDiff, Change, FieldDiff
+│   │   ├── script.ts                # MigrationScript, Statement
+│   │   ├── data.ts                  # DataRow, DataTableDiff
+│   │   ├── ipc.ts                   # IpcChannelMap (single source of truth)
+│   │   └── index.ts
+│   └── diff/
+│       └── engine.ts                # diff(source, target): SchemaDiff (pure)
 │
-├── src/                           # renderer
-│   ├── main.tsx
-│   ├── App.tsx
+├── src/renderer/src/                # React frontend
+│   ├── main.tsx                     # mount
+│   ├── App.tsx                      # routes
+│   ├── store/                       # Zustand global state
+│   ├── hooks/
+│   │   └── useShortcut.ts           # keyboard shortcut binding
 │   ├── routes/
 │   │   ├── ConnectionsPage.tsx
 │   │   ├── ComparePage.tsx
-│   │   └── ResultPage.tsx
+│   │   ├── ResultPage.tsx           # Schema / Data tab switcher
+│   │   └── ErdPage.tsx              # ERD viewer
 │   ├── components/
-│   │   ├── ui/                    # shadcn primitives (button, dialog, tabs, ...)
+│   │   ├── Layout.tsx               # header + nav + auto-update banner
+│   │   ├── ui/                      # shadcn/ui primitives
 │   │   ├── connections/
-│   │   │   ├── ConnectionList.tsx
-│   │   │   ├── ConnectionForm.tsx
-│   │   │   └── TestConnectionButton.tsx
-│   │   ├── compare/
-│   │   │   ├── EnvPicker.tsx
-│   │   │   └── TableCheckTree.tsx
 │   │   ├── diff/
-│   │   │   ├── TableTree.tsx      # left rail
-│   │   │   ├── SectionTabs.tsx    # Columns | Indexes | FKs | Checks | Options
-│   │   │   ├── SideBySide.tsx     # the marquee component
-│   │   │   ├── DiffRow.tsx        # one line in the diff
-│   │   │   └── InlineHighlight.tsx  # token-level highlight inside a modified line
-│   │   └── script/
-│   │       ├── ScriptPreview.tsx  # CodeMirror, copy/save buttons
-│   │       └── DestructiveBadge.tsx
-│   ├── store/
-│   │   ├── index.ts
-│   │   ├── connections.slice.ts
-│   │   ├── comparison.slice.ts
-│   │   └── ui.slice.ts
+│   │   │   ├── TableTree.tsx        # virtualized table tree (@tanstack/react-virtual)
+│   │   │   ├── DiffPanel.tsx        # per-table diff with section tabs
+│   │   │   └── ...
+│   │   ├── script/
+│   │   │   └── ScriptPreview.tsx    # migration script preview + copy/save
+│   │   ├── data/
+│   │   │   ├── DataDiffView.tsx     # left list + right panel (data tab)
+│   │   │   └── DataTablePanel.tsx   # row diff + data sync SQL preview/modal
+│   │   └── erd/
+│   │       ├── ErdCanvas.tsx        # React Flow + dagre layout + export
+│   │       └── TableNode.tsx        # custom node — header + columns
 │   ├── lib/
-│   │   ├── api.ts                 # typed wrapper over window.zaptar
-│   │   ├── format.ts              # presentational helpers (DDL → string)
-│   │   └── colors.ts              # diff-color tokens used by Tailwind classes
-│   ├── styles/
-│   │   └── index.css              # @import "tailwindcss"; @theme { ... }
-│   └── env.d.ts
+│   │   ├── api.ts                   # typed window.zaptar wrapper (ZaptarApi type)
+│   │   ├── sql-highlight.tsx        # SQL tokenizer + SqlCode component
+│   │   └── utils.ts
+│   └── assets/
+│       └── main.css                 # Tailwind, dark scrollbars, React Flow theme
 │
-└── tests/
-    ├── unit/
-    │   ├── diff-engine.test.ts
-    │   ├── emit-sql.test.ts
-    │   └── format-ddl.test.ts
-    ├── fixtures/
-    │   ├── prod.sql               # baseline schema
-    │   └── dev.sql                # newer schema (superset)
-    └── e2e/
-        └── smoke.spec.ts          # Playwright
+└── tests/                           # (kept lightweight — Vitest unit, manual E2E)
+    └── ...
 ```
 
 ---
@@ -436,32 +426,56 @@ export type Warning = {
 }
 ```
 
-### 6.5 IPC contracts
+### 6.5 IPC contracts (current)
 
 ```ts
-// shared/types/ipc.ts
+// shared/types/ipc.ts — actual shipped channel map
 
-export type IpcChannels = {
-  'connection:list': { req: void; res: Connection[] }
-  'connection:create': { req: ConnectionDraft; res: Connection }
-  'connection:update': { req: { id: string; patch: Partial<ConnectionDraft> }; res: Connection }
-  'connection:delete': { req: { id: string }; res: void }
-  'connection:test': {
-    req: { id: string }
-    res: { ok: boolean; error?: string; serverVersion?: string }
-  }
+export type IpcChannelMap = {
+  // Connections
+  'connection:list':        { req: void;            res: Connection[] }
+  'connection:create':      { req: ConnectionDraft; res: Connection }
+  'connection:update':      { req: { id: string; patch: Partial<ConnectionDraft> };  res: Connection }
+  'connection:delete':      { req: { id: string };  res: void }
+  'connection:test':        { req: { id: string };  res: ConnectionTestResult }
+  'connection:test-draft':  { req: ConnectionDraft; res: ConnectionTestResult }
 
-  'compare:list-tables': { req: { id: string }; res: { tables: string[] } }
+  // Schema comparison
+  'compare:list-tables':    { req: { id: string };  res: { tables: string[] } }
   'compare:run': {
     req: { sourceId: string; targetId: string; tables?: string[] }
     res: { diff: SchemaDiff; script: MigrationScript }
   }
-
-  'script:save': {
-    req: { script: MigrationScript }
-    res: { path: string | null /* null = user cancelled */ }
+  'compare:table': {
+    // Lazy single-table introspect for the unchanged-table panel.
+    req: { connectionId: string; tableName: string }
+    res: Table | null
   }
-  'script:copy': { req: { script: MigrationScript }; res: void }
+
+  // ERD viewer (full schema for one connection)
+  'schema:introspect':      { req: { connectionId: string }; res: Schema }
+
+  // Migration script export
+  'script:save':            { req: { script: MigrationScript }; res: { path: string | null } }
+  'script:copy':            { req: { script: MigrationScript }; res: void }
+
+  // Auto-update
+  'update:install':         { req: void; res: void }
+
+  // Data comparison
+  'data:compare': {
+    req: {
+      sourceId: string
+      targetId: string
+      tableName: string
+      keyColumns: string[]
+      limit: number
+    }
+    res: DataTableDiff
+  }
+  // Dedicated handler — separated from script:save so DDL and DML pipelines
+  // never share a code path.
+  'data:save-sql':          { req: { sql: string; defaultName: string }; res: { path: string | null } }
 }
 ```
 
@@ -739,9 +753,109 @@ For `optionChanges`: walk a fixed allowlist of option keys (`engine`, `charset`,
 - Map iteration order is insertion order in modern JS, but the engine sorts all output arrays by name (or by ordinal where applicable) so the output is byte-identical for the same input.
 - Tested by golden snapshots.
 
-### 10.5 Why no rename detection in v0.1
+### 10.5 Why no rename detection
 
-Renames are heuristic and false positives are expensive (you'd issue `RENAME COLUMN` instead of `DROP+ADD`, which preserves data unintentionally — sometimes good, sometimes wrong). Without a confirmation UI it's risky. v0.1 always emits `DROP` + `ADD`. The `Change<T>` union still has a `'renamed'` arm so adding it later is a non-breaking change.
+Renames are heuristic and false positives are expensive (you'd issue `RENAME COLUMN` instead of `DROP+ADD`, which preserves data unintentionally — sometimes good, sometimes wrong). Without a confirmation UI it's risky. The current emitter always emits `DROP` + `ADD`. The `Change<T>` union has a `'renamed'` arm so adding it later is a non-breaking change.
+
+---
+
+## 10A. Data comparison (`src/main/providers/mysql/data.ts`)
+
+Data comparison is a separate feature pipeline that runs **on demand per table** from the Result page Data tab. It is not coupled to the schema diff.
+
+### 10A.1 Flow
+
+```
+User picks key columns + row limit on Data tab
+            │
+            ▼  IPC: 'data:compare'
+   Main: open both connections in parallel
+            │
+            ▼
+   fetchTableRows(srcConn, ..., limit)  ┐
+   fetchTableRows(tgtConn, ..., limit)  ┘  Promise.all
+            │
+            ▼
+   diffTableData(...)  →  DataTableDiff
+            │
+            ▼
+   Renderer: row diff table + data sync SQL (generated client-side)
+```
+
+### 10A.2 Safety guarantees
+
+- **SQL injection guard** — `tableName` is interpolated into `SELECT * FROM \`${tableName}\``; mysql2 cannot parameterize identifiers, so an explicit `assertSafeIdentifier` call rejects any string containing backtick, quote, NUL, whitespace, or backslash.
+- **Cap detection** — fetch `limit + 1` rows; if more than `limit` come back, set `capped: true` and trim. UI surfaces a banner.
+- **Boolean normalization** — `rowsEqual` collapses booleans to `0 / 1` so BIT and TINYINT(1) columns compared across mysql2 driver versions don't produce false-positive modified rows.
+- **Column union** — column list is the union of keys across all rows from both sides, in source-first order. Prevents columns missing from `rows[0]` being silently dropped from the diff.
+
+### 10A.3 Output type
+
+```ts
+// shared/types/data.ts
+export type DataRow = Record<string, string | number | boolean | null>
+
+export type DataTableDiff = {
+  tableName: string
+  keyColumns: string[]
+  columns: string[]      // ordered, union of source + target row keys
+  added:    DataRow[]    // in source, missing from target
+  removed:  DataRow[]    // in target, missing from source
+  modified: { key: DataRow; before: DataRow; after: DataRow }[]
+  rowsFetched: { source: number; target: number }
+  capped: boolean
+  limit: number
+}
+```
+
+### 10A.4 Data sync SQL generation
+
+`generateDataSyncSql(diff, skipKeyInInsert, filter)` is a pure renderer-side function. No IPC for SQL emission — the renderer assembles the script directly from `DataTableDiff`. It produces formatted INSERT / UPDATE / DELETE statements (column list and values on separate lines for readability). The `filter: RowFilter` argument is the same one driving the row-diff table view, so saved / copied SQL always matches what the user sees. When any filter is inactive the Save / Copy buttons append `(filtered)` to make the omission obvious.
+
+The save flow uses the dedicated `data:save-sql` IPC — deliberately separated from `script:save` so DDL and DML pipelines never share a code path.
+
+---
+
+## 10B. ERD viewer (`src/renderer/src/components/erd/`)
+
+The ERD viewer is an exploration tool, not part of the diff workflow. It reads one connection's full schema via `schema:introspect` and renders it as an interactive node-and-edge canvas.
+
+### 10B.1 Stack
+
+- **`@xyflow/react`** v12 — node-based canvas with built-in zoom / pan / minimap
+- **`@dagrejs/dagre`** — auto-layout in left-to-right rank order
+- **`html-to-image`** — captures the React Flow viewport for PNG / SVG export
+
+### 10B.2 Layout
+
+`ErdCanvas` runs dagre layout once per `(tables, selectedTables)` change:
+
+- Each `Table` becomes a node with width derived from longest header / column-row content (260 – 460 px) and height = `header + rowCount * rowHeight`.
+- Each `ForeignKey` becomes a directed edge from referenced (parent) → referencing (child) — so dagre puts parents on the left rank.
+- Self-references and FKs to filtered-out tables are silently dropped so they don't perturb dagre's rank computation.
+
+### 10B.3 Edge styling
+
+- **Cardinality** detected from the FK column set: covered by primary / unique index → 1:1, otherwise N:1.
+- **Crow's-foot SVG markers** at both endpoints (single-bar `||` for "exactly one", three-pronged for "many"). Markers use SVG2 `context-stroke` so they inherit the edge's color.
+- **Per-relation color** from a stable 7-shade hash so overlapping lines are distinguishable.
+- **Hover** brings the edge to front (z-index), animates it, fades the others to 25% opacity, expands the label to include `ON DELETE` action when not the default.
+- **Memo split** — node layout and edge styling have separate `useMemo` deps so hovering an edge re-derives only the styling pass; the node layout (dagre) doesn't re-run.
+
+### 10B.4 Custom node (`TableNode`)
+
+- Header: full table name (no ellipsis — width is dynamic), engine badge.
+- Per-column row: PK key icon or FK link icon, name, type, `NULL` badge if nullable, `= value` badge for non-null defaults. Tooltip exposes the full column metadata.
+- React Flow `<Handle>` per FK column on the right edge (source) and per PK column on the left edge (target) so edges connect column row → column row.
+
+### 10B.5 Performance and UX
+
+- **Lazy table selection** — initial canvas is empty after schema load. Selecting all 500+ tables of a real database freezes the renderer; user picks the subset they care about.
+- **"+ neighbors" button** per sidebar entry adds a table together with every FK-connected one (1 hop in either direction).
+- **Jump to table** — clicking a table name in the sidebar (a) ensures the table is in the selection, (b) calls `useReactFlow().setCenter` to pan and zoom to it. A nonce in the focus prop ensures repeated clicks on the same table re-center.
+- **Stale-fetch guards** on `schema:introspect` (request id ref) so a slow response from an old connection cannot overwrite a newer one.
+- **Export** — top-right toolbar with PNG and SVG buttons. Uses `getNodesBounds` + `getViewportForBounds` to produce a transform that fits the full graph (not just the viewport) into the target image. Filters out Controls / MiniMap / Attribution from the captured DOM.
+- **Dark canvas** — `colorMode="dark"` on `<ReactFlow>` plus CSS overrides in `main.css` align Controls / MiniMap with the app palette.
 
 ---
 
@@ -751,9 +865,25 @@ Renames are heuristic and false positives are expensive (you'd issue `RENAME COL
 
 - `/connections` — list + form (default landing if no connections exist)
 - `/compare` — pick source/target/tables, "Run compare" button
-- `/result` — diff tree + side-by-side + script tab
+- `/result` — diff tree + side-by-side diff (Schema tab) or row-level diff (Data tab) + migration script
+- `/erd` — single-connection ERD viewer
 
-Top-level layout: title bar with the app name, a route-switcher (three tabs / nav items), and a status footer ("connected to MariaDB 10.11" while comparing).
+Top-level layout: header bar with the app name, a route-switcher with four nav items (Connections / Compare / Result / ERD), and an auto-update banner on the right when an update is available or downloaded.
+
+### 11.1A Keyboard shortcuts (global / per-page)
+
+| Shortcut          | Where       | Action                                                  |
+| ----------------- | ----------- | ------------------------------------------------------- |
+| `Ctrl+,`          | Global      | Go to Connections page                                  |
+| `Ctrl+P`          | Result      | Focus and select the table-tree search input            |
+| `Ctrl+↓ / Ctrl+↑` | Result      | Navigate to next / previous table in the tree           |
+| `Ctrl+\``         | Result      | Toggle Diff ↔ Migration Script view                     |
+| `Ctrl+1` … `Ctrl+5` | Result    | Switch section tab (Columns / Indexes / FKs / Checks / Options) |
+| `Ctrl+Shift+S`    | Result      | Save migration script to `.sql`                         |
+| `Ctrl+Shift+C`    | Result      | Copy migration script to clipboard                      |
+| `Ctrl+Enter`      | Compare     | Run compare (when source + target are set)              |
+| `Ctrl+Shift+X`    | Compare     | Swap source ↔ target                                    |
+| `Esc`             | Data tab    | Close the data-sync SQL full-screen modal               |
 
 ### 11.2 ConnectionsPage
 
@@ -1034,108 +1164,114 @@ This is the single most valuable end-to-end test. It catches emitter bugs and in
 
 ---
 
-## 16. Development milestones
+## 16. Release history (shipped milestones)
 
-### Milestone 0 — Scaffold (1–2 days)
+### v1.0.0 — Initial release
 
-- `pnpm init`, install dependencies
-- `electron-vite` project structure
-- React 19 + Tailwind v4 + shadcn/ui set up
-- A "hello world" window that loads
-- ESLint + Prettier + tsconfig (strict)
-- Empty `shared/`, `electron/main/`, `src/` skeletons
+- Schema introspection for MySQL / MariaDB (tables, columns, indexes, FKs, checks, table options)
+- Pure-TS diff engine (`shared/diff/engine.ts`)
+- SQL emitter with safe statement ordering, destructive flagging, warnings
+- Per-table side-by-side diff with section tabs (Columns / Indexes / FKs / Checks / Options)
+- Migration script preview with custom SQL syntax highlighter (no CodeMirror dependency)
+- Connection storage with OS-keychain-encrypted passwords
+- Test-from-form, duplicate, edit-without-rewrite-password
+- Result page table tree with grouped search and change-count badge
+- Windows NSIS installer; macOS / Linux buildable from source
 
-### Milestone 1 — Connection management (2–3 days)
+### v1.0.1 — Polish + auto-update
 
-- Connection types in `shared/`
-- lowdb wrapper, keytar wrapper in main
-- IPC handlers for `connection:*`
-- ConnectionsPage UI with add/edit/delete
-- Test-connection flow (real `mysql2` ping)
-- Manual smoke against a Docker MariaDB
+- VS Code-style keyboard shortcuts (Ctrl+P, Ctrl+↓/↑, Ctrl+\`, Ctrl+1…5, Ctrl+Shift+S/C, Ctrl+Enter, Ctrl+Shift+X)
+- `electron-updater` integration with header banner ("Downloading update X" → "Restart to update")
+- Compare page: source ↔ target swap
+- Result page: full structure shown for added / removed tables, on-demand schema fetch for unchanged tables
+- Fixes: silent script-save crashes surfaced inline, MariaDB `Unknown column 'EXPRESSION'` fallback
+- CI builds installers for Windows + macOS + Linux in parallel
 
-### Milestone 2 — Introspection (2–3 days)
+### v1.1.0 — Data comparison
 
-- `MySQLProvider.introspect` with all five queries
-- Schema model populated correctly
-- Unit tests for normalization rules (charset inheritance, default-NULL ambiguity)
-- IPC handler for `compare:list-tables`
-- ComparePage UI: pick source/target, see table lists
+- New **Data** tab on Result page; row-level diff per table on demand
+- User-picked match key columns (primary key auto-suggested)
+- Configurable row limit (default 10 000) with cap detection
+- Filter chips (added / removed / modified) drive both the row diff view and the generated SQL
+- Generated INSERT / UPDATE / DELETE data-sync SQL (deliberately separate from schema migration)
+- "Skip key columns in INSERT" option for PK conflict scenarios
+- Full-screen modal SQL preview, copy + save
+- Table tree sidebar virtualized via `@tanstack/react-virtual`
+- `SqlCode` extracted to shared util for reuse between schema and data preview
 
-### Milestone 3 — Diff engine (2–3 days)
+### v1.2.0 — ERD viewer + critical fixes
 
-- `shared/diff/engine.ts` with full unit-test coverage (every case from §15.1)
-- IPC handler for `compare:run` returning a `SchemaDiff`
-- Result page renders a basic table tree (no fancy diff UI yet)
+- New **ERD** page — full database visualization for any saved connection
+- Crow's foot SVG markers; per-relation colors; smoothstep edge routing; hover highlight + animation
+- Lazy table selection; "+ neighbors" sidebar button; jump-to-table; PNG / SVG export
+- TableNode renders NULL / DEFAULT badges per column; dynamic per-table width
+- Critical fixes for the v1.1.0 data comparison feature:
+  - SQL injection guard on `tableName`
+  - Column union (instead of first-row keys only)
+  - Boolean normalization in `rowsEqual`
+  - `showNotice` timer cleanup
+  - Stale-fetch guards in `DataDiffView`
+  - `(filtered)` indicator on Save / Copy when filter chips are inactive
+  - Dedicated `data:save-sql` IPC (decouples DDL and DML pipelines)
+  - SQL tokenizer handles standard `''` escape
+  - Modal a11y (`role="dialog"` + Escape close)
+  - Load-button race guard via request-id ref
+- CI pin to `ubuntu-22.04` + `libfuse2` install so AppImage / deb builds succeed
 
-### Milestone 4 — SQL emitter (2–3 days)
+### v1.2.1 — In progress
 
-- `MySQLProvider.emitSql` with statement ordering
-- Destructive flagging
-- Warnings emission
-- Unit tests for ordering invariants
-- The round-trip integration test (§15.2) passing
-
-### Milestone 5 — Side-by-side UI (3–4 days)
-
-- `SideBySide`, `DiffRow`, `InlineHighlight`, `SectionTabs`
-- Tailwind v4 theme tokens
-- Table tree with filter and group toggles
-- Per-table change badges
-
-### Milestone 6 — Script preview (2 days)
-
-- `ScriptPreview` with CodeMirror 6
-- Copy / Save buttons (IPC for save dialog)
-- Warnings panel
-- Statement outline navigator
-- Destructive markers in gutter
-
-### Milestone 7 — Polish (2–3 days)
-
-- Empty / error / loading states
-- Keyboard navigation in the diff tree
-- Settings (light/dark theme toggle)
-- App menu (File, Edit, View, Help)
-- README with screenshots
-
-### Milestone 8 — Packaging (1–2 days)
-
-- `electron-builder` config
-- Code-signing placeholders (out of scope to actually sign)
-- Test installers on Windows + macOS + Linux
-- Release v0.1
-
-**Total estimate:** ~17–24 working days for one engineer.
+- Themed scrollbars across the app (dark variant matching the palette)
+- ERD canvas PNG / SVG export buttons
+- (More may land before tag.)
 
 ---
 
-## 17. Setup instructions (for the next agent or a new dev)
+## 16A. Future roadmap (not yet shipped)
+
+The architecture supports these without invasive changes:
+
+- **Postgres provider** — implement `SchemaProvider` for `pg` driver; reuse the diff engine and UI unchanged.
+- **In-app script execution** with progress feedback and rollback on first failure (the `apply` slot on `SchemaProvider` is reserved for this).
+- **Stored procedures / functions / triggers / views** — extend the introspection queries and `Schema.tables` peer collections (`Schema.routines`, `Schema.triggers`, …); diff engine extends naturally via parallel arrays.
+- **Schema history** — persist successive `Schema` snapshots locally; allow time-travel diff.
+- **Rename detection** — heuristic + confirmation UI.
+- **Functional ERD edges** — show outgoing FK arrows from FK column row directly to the targeted PK row, even across many-column tables.
+- **Data sync execute** — apply the generated INSERT / UPDATE / DELETE script directly inside the app with row-progress feedback.
+
+---
+
+## 17. Setup instructions
 
 ```sh
-# 1. Initialize the project (after Milestone 0)
-cd D:/Work/Rehoukrel/zaptar
+# 1. Clone + install
+git clone https://github.com/TiveCS/zaptar.git
+cd zaptar
 pnpm install
 
 # 2. Start dev (Vite HMR + Electron main reload)
 pnpm dev
 
-# 3. Run unit tests
-pnpm test
+# 3. Type-check (run as CI pre-flight too)
+pnpm typecheck
 
-# 4. Build for production
+# 4. Build production bundle (no installer)
 pnpm build
 
 # 5. Package installers
-pnpm build && pnpm package
+pnpm build:win        # Windows NSIS installer
+pnpm build:mac        # macOS DMG
+pnpm build:linux      # Linux AppImage / deb / snap
+pnpm build:unpack     # Unpacked dir for fast local testing
 ```
 
-To run integration tests against real MariaDB:
+For a release: bump `package.json` version, update `CHANGELOG.md`, push a `v*` tag. The GitHub Actions workflow at `.github/workflows/release.yml` builds installers for all three platforms in parallel and publishes them to a draft release on the matching tag (Linux pinned to `ubuntu-22.04` + `libfuse2`).
+
+To smoke-test against MariaDB locally:
 
 ```sh
-docker compose -f tests/docker-compose.yml up -d
-pnpm test:integration
-docker compose -f tests/docker-compose.yml down
+docker run -d --name zaptar-prod -e MARIADB_ROOT_PASSWORD=pw -p 3307:3306 mariadb:10.11
+docker run -d --name zaptar-dev  -e MARIADB_ROOT_PASSWORD=pw -p 3308:3306 mariadb:10.11
+# Add both as connections in the app, run a Compare against schemas you've seeded.
 ```
 
 Required local tooling:
@@ -1169,9 +1305,11 @@ These are not blockers for v0.1 but should be revisited:
 | **Schema**                | A single MySQL database (in MySQL terminology, "schema" and "database" are synonyms).                |
 | **Diff**                  | The computed difference between source and target, in our normalized model.                          |
 | **Migration script**      | The ordered list of SQL statements that, when applied to the target, makes it match the source.      |
-| **Provider**              | A pluggable implementation of `SchemaProvider` for one dialect family. v0.1 has one (MySQL/MariaDB). |
+| **Data sync SQL**         | The ordered list of INSERT / UPDATE / DELETE statements that brings target row contents in line with source for a single table. Distinct file, distinct IPC channel from the migration script. |
+| **Provider**              | A pluggable implementation of `SchemaProvider` for one dialect family. Today: `mysql` only.          |
 | **Destructive statement** | A statement that drops a database object or that may cause data loss (e.g. narrowing a column type). |
+| **Cardinality**           | In the ERD, the number of rows on each side of an FK relationship: `1:1` (FK column is unique-covered) or `N:1` (FK column is non-unique). Drawn with crow's-foot markers. |
 
 ---
 
-_End of proposal._
+_End of specification._
