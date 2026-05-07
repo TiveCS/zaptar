@@ -312,6 +312,7 @@ export function ErdPage(): React.JSX.Element {
               tables={tables}
               selectedTables={selectedTables}
               focusTable={focus ? `${focus.table}#${focus.nonce}` : null}
+              databaseName={loadState.schema.databaseName}
             />
           </div>
 

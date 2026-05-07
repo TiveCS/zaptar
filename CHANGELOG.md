@@ -2,6 +2,9 @@
 
 ## v1.2.1 — Unreleased
 
+### Features
+- **ERD export** — top-right toolbar on the ERD canvas now has **PNG** and **SVG** download buttons. Captures the entire graph (not just the visible viewport) by computing the bounding rect of every node, deriving a viewport transform via `getViewportForBounds`, and rasterizing the React Flow viewport with `html-to-image`. Output filename includes the database name and ISO date stamp.
+
 ### Style
 - **Themed scrollbars** — Chromium's default white-track / gray-thumb scrollbar replaced with a dark variant that matches the app palette. Width stays close to the OS default for hit-testability; thumb floats with a 3 px transparent inner border, hover and active states bump the thumb shade.
 

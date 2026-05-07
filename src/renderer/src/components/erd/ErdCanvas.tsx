@@ -3,12 +3,17 @@ import {
   Background,
   Controls,
   type Edge,
+  getNodesBounds,
+  getViewportForBounds,
   MiniMap,
   type Node,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow
 } from '@xyflow/react'
+import { toPng, toSvg } from 'html-to-image'
+import { Download, ImageDown, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { Table } from '@shared/types/schema'
@@ -27,6 +32,8 @@ type Props = {
   selectedTables: Set<string>
   /** When this changes, center the canvas on the matching table node. */
   focusTable?: string | null
+  /** Used as the prefix for the exported file name. */
+  databaseName?: string
 }
 
 /**
@@ -271,6 +278,129 @@ function CardinalityMarkers(): React.JSX.Element {
 }
 
 /**
+ * Export the current ERD graph (all nodes, even off-screen ones) as PNG or SVG.
+ *
+ * Uses React Flow's `getNodesBounds` to compute the bounding rect of every
+ * rendered node and `getViewportForBounds` to derive a transform that fits
+ * the entire graph into the target image dimensions. We capture the
+ * `.react-flow__viewport` element with html-to-image and apply that transform
+ * inline so the exported image contains the full graph regardless of where
+ * the user has the viewport panned.
+ */
+function downloadDataUrl(dataUrl: string, fileName: string): void {
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+const EXPORT_PADDING = 40
+const EXPORT_MIN_ZOOM = 0.5
+const EXPORT_MAX_ZOOM = 2
+
+function ExportPanel({
+  databaseName
+}: {
+  databaseName: string | undefined
+}): React.JSX.Element {
+  const { getNodes } = useReactFlow()
+  const [busy, setBusy] = React.useState<'png' | 'svg' | null>(null)
+
+  async function exportImage(format: 'png' | 'svg'): Promise<void> {
+    if (busy) return
+    setBusy(format)
+    try {
+      const nodes = getNodes()
+      if (nodes.length === 0) {
+        setBusy(null)
+        return
+      }
+      const bounds = getNodesBounds(nodes)
+      // Add fixed padding around the graph so labels and crow's-foot markers
+      // aren't clipped at the image edges.
+      const width = Math.ceil(bounds.width + EXPORT_PADDING * 2)
+      const height = Math.ceil(bounds.height + EXPORT_PADDING * 2)
+      const viewport = getViewportForBounds(
+        bounds,
+        width,
+        height,
+        EXPORT_MIN_ZOOM,
+        EXPORT_MAX_ZOOM,
+        0.1
+      )
+
+      const target = document.querySelector('.react-flow__viewport') as HTMLElement | null
+      if (!target) {
+        setBusy(null)
+        return
+      }
+
+      const opts = {
+        backgroundColor: getComputedStyle(document.body).backgroundColor || '#0a0a0a',
+        width,
+        height,
+        style: {
+          width: `${width}px`,
+          height: `${height}px`,
+          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`
+        },
+        // Filter: skip the React Flow attribution + minimap so they don't
+        // appear in the exported image.
+        filter: (node: HTMLElement) =>
+          !node.classList?.contains?.('react-flow__minimap') &&
+          !node.classList?.contains?.('react-flow__controls') &&
+          !node.classList?.contains?.('react-flow__attribution')
+      }
+
+      const dataUrl = format === 'png' ? await toPng(target, opts) : await toSvg(target, opts)
+      const stamp = new Date().toISOString().slice(0, 10)
+      const dbPart = databaseName ? `-${databaseName}` : ''
+      downloadDataUrl(dataUrl, `erd${dbPart}-${stamp}.${format}`)
+    } catch (err) {
+      // Surface to console — html-to-image errors are usually CSS-related
+      // (e.g. failing to inline external fonts). The button label flips back
+      // to idle state via finally.
+      console.error('ERD export failed:', err)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Panel position="top-right" className="!m-2 flex gap-1.5">
+      <button
+        onClick={() => exportImage('png')}
+        disabled={busy !== null}
+        title="Download ERD as PNG"
+        className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1 text-xs font-medium text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-accent)] disabled:opacity-50"
+      >
+        {busy === 'png' ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <ImageDown className="size-3.5" />
+        )}
+        PNG
+      </button>
+      <button
+        onClick={() => exportImage('svg')}
+        disabled={busy !== null}
+        title="Download ERD as SVG (vector)"
+        className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1 text-xs font-medium text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-accent)] disabled:opacity-50"
+      >
+        {busy === 'svg' ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Download className="size-3.5" />
+        )}
+        SVG
+      </button>
+    </Panel>
+  )
+}
+
+/**
  * Inner component that lives inside <ReactFlowProvider> so it can use
  * `useReactFlow`. Watches the `focusTable` prop and centers the viewport on
  * the matching node when it changes.
@@ -310,7 +440,12 @@ function FocusController({
   return null
 }
 
-export function ErdCanvas({ tables, selectedTables, focusTable }: Props): React.JSX.Element {
+export function ErdCanvas({
+  tables,
+  selectedTables,
+  focusTable,
+  databaseName
+}: Props): React.JSX.Element {
   const [hoveredEdge, setHoveredEdge] = React.useState<string | null>(null)
 
   // Nodes depend only on schema/selection — hover state must NOT trigger a
@@ -390,6 +525,7 @@ export function ErdCanvas({ tables, selectedTables, focusTable }: Props): React.
             maskColor="rgb(0 0 0 / 0.5)"
           />
           <FocusController focusTable={focusTable ?? null} nodes={nodes} />
+          <ExportPanel databaseName={databaseName} />
         </ReactFlow>
       </div>
     </ReactFlowProvider>
