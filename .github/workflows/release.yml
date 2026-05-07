@@ -54,7 +54,11 @@ jobs:
           # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
   release-linux:
-    runs-on: ubuntu-latest
+    # Pinned to 22.04 because ubuntu-24.04 dropped libfuse2 (required by
+    # AppImage runtime) and updated dpkg in ways that broke fpm's deb output.
+    # Bumping to 24.04 is fine once electron-builder ships an AppImage runtime
+    # that doesn't need libfuse2.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +70,12 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Install Linux build deps
+        # libfuse2  → AppImage runtime
+        # fakeroot, dpkg → deb packaging via fpm
+        # rpm        → optional, useful if rpm target added later
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 fakeroot dpkg
 
       - name: Install dependencies
         run: pnpm install
