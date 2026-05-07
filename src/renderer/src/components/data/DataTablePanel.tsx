@@ -620,9 +620,24 @@ export function DataTablePanel({
             </div>
           )}
 
-          {/* SQL full-screen modal */}
+          {/* SQL full-screen modal — accessible via role="dialog", closes on
+              Escape, autofocuses container so the keypress lands on the modal
+              regardless of where focus was before opening. */}
           {sqlModalOpen && loadState.status === 'loaded' && (
-            <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)]">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Data sync SQL preview"
+              tabIndex={-1}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  setSqlModalOpen(false)
+                }
+              }}
+              className="fixed inset-0 z-50 flex flex-col bg-[var(--color-background)] outline-none"
+            >
               {/* Modal header */}
               <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-6 py-3">
                 <div className="flex flex-1 items-center gap-2">
