@@ -65,8 +65,22 @@ export function tokenizeSql(code: string): Token[] {
       out.push({ type: 'comment', value: v }); i += v.length; continue
     }
     if (code[i] === "'") {
+      // SQL string literal scan. Two escape forms are valid in MySQL:
+      //   1. Backslash escape:  '\''  → literal `'`
+      //   2. Doubled quote:     ''''  → literal `'`  (SQL standard, used in saved .sql files)
+      // Earlier version handled only #1, which broke highlighting of any string
+      // containing the standard `''` escape (e.g. data sync output for values
+      // like 'it''s a value').
       let j = i + 1
-      while (j < code.length) { if (code[j] === "'" && code[j - 1] !== '\\') { j++; break }; j++ }
+      while (j < code.length) {
+        // Backslash-escaped quote → skip both
+        if (code[j] === '\\' && j + 1 < code.length) { j += 2; continue }
+        // Doubled-quote escape → skip both, stay inside string
+        if (code[j] === "'" && code[j + 1] === "'") { j += 2; continue }
+        // Lone single-quote → end of string literal
+        if (code[j] === "'") { j++; break }
+        j++
+      }
       out.push({ type: 'string', value: code.slice(i, j) }); i = j; continue
     }
     if (code[i] === '`') {
