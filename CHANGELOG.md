@@ -1,12 +1,16 @@
 # Changelog
 
-## v1.2.1 — Unreleased
+## v1.2.1
 
 ### Features
 - **ERD export** — top-right toolbar on the ERD canvas now has **PNG** and **SVG** download buttons. Captures the entire graph (not just the visible viewport) by computing the bounding rect of every node, deriving a viewport transform via `getViewportForBounds`, and rasterizing the React Flow viewport with `html-to-image`. Output filename includes the database name and ISO date stamp.
 
 ### Style
 - **Themed scrollbars** — Chromium's default white-track / gray-thumb scrollbar replaced with a dark variant that matches the app palette. Width stays close to the OS default for hit-testability; thumb floats with a 3 px transparent inner border, hover and active states bump the thumb shade.
+
+### Docs
+- **`CLAUDE.md`** added at repo root — concise onboarding doc for AI agents and new contributors. Tech stack quick reference, layering rules, common workflows (add IPC channel / route / shadcn primitive), conventions, "don't do this" warnings, and a where-things-live lookup table.
+- **`PROPOSAL.md`** swept to match the actual codebase state — fixed §12 (single-store Zustand, not slices pattern), §13 (Electron `safeStorage`, not keytar), §14.3 (no native deps anymore), §11.x (real component names: `DiffPanel`, `TableTree`, `DataTablePanel`, `ErdCanvas` — not `SideBySide` / `DiffRow` / `EnvPicker`). Added agent reading-guide block at the top with an in-document table of contents.
 
 ---
 

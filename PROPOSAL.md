@@ -9,6 +9,26 @@ This document is the canonical project specification. It evolves with the
 codebase: every section describes the **shipped** behavior, not aspirations.
 Future-work items live in their own clearly labelled section at the bottom.
 
+> **Reading guide for AI agents and new contributors**
+>
+> If you have limited context budget, read in this order:
+>
+> 1. **§1 Executive summary** + **§2 Goals** — what zaptar is and isn't
+> 2. **§4 Architecture** + **§4.3 Layering rules** — process boundaries
+> 3. **§6.5 IPC contracts** — every renderer ↔ main message
+> 4. **§5 Project structure** — where files live
+> 5. **The section relevant to your task:**
+>    - Schema diff workflow → §8 (introspection), §9 (SQL emit), §10 (diff engine)
+>    - Data comparison → §10A
+>    - ERD viewer → §10B
+>    - State management → §12
+>    - Connection storage → §13
+>    - UI shell / routes → §11
+>
+> The repo also has a short [`CLAUDE.md`](./CLAUDE.md) at the root with
+> conventions, "don't do this" warnings, and pointers — read that first
+> if you're an AI agent picking up the codebase cold.
+
 ---
 
 ## 1. Executive summary
@@ -887,90 +907,71 @@ Top-level layout: header bar with the app name, a route-switcher with four nav i
 
 ### 11.2 ConnectionsPage
 
-- **List**: each row shows label, dialect badge, host:port, db name, last-tested timestamp.
-- **Actions per row**: Edit, Delete (with confirm), Test (shows a spinner → green/red badge and server version on success).
-- **Add button** opens `ConnectionForm` in a sheet/dialog.
-- **Form fields**: label, dialect (`mysql`/`mariadb`), host, port (default 3306), username, password (masked), database, "Use SSL" checkbox.
-- **Validation**: required fields, port 1-65535, label unique.
-- On save: main process writes connection record to lowdb and the password to keytar.
+- **List**: each row shows label, dialect badge, host:port, db name.
+- **Actions per row**: Edit, Delete (with confirm), Test, Duplicate.
+- **Add button** opens the connection form in a dialog.
+- **Form fields**: label, host, port (default 3306), username, password (masked, with show/hide toggle), database, "Use SSL" checkbox.
+- **Validation** via React Hook Form + Zod: required fields, port 1-65535.
+- **Test from form**: live ping against the in-flight credentials before saving (`connection:test-draft` IPC) so the user knows the form values work before persisting.
+- On save: main process encrypts the password via `safeStorage` and writes the record to lowdb.
 
 ### 11.3 ComparePage
 
-Split layout:
+Single-column layout (`ComparePage.tsx`):
 
-- **Left**: "Source (newer)" `EnvPicker` — dropdown of connections, "this is the schema we're matching to". Helper text: "Usually your dev/staging database."
-- **Right**: "Target (older)" `EnvPicker` — dropdown of connections. Helper text: "Usually your prod database. This is what will receive the migration."
-- **Below**: `TableCheckTree` — once both sides are picked, the app introspects table lists from both and shows a checkbox tree.
-  - Three groups: "Only in source" (will be created), "Only in target" (will be dropped), "In both" (will be diffed).
-  - All checked by default. Each group has a "select all in group" checkbox.
-- **Run button**: disabled until both connections selected. Shows progress: "Connecting…" → "Introspecting source…" → "Introspecting target…" → "Computing diff…" → navigates to `/result`.
+- **Two `ConnectionPicker` cards** side-by-side: Source (newer) and Target (older). The middle of the row has a swap button (also bound to `Ctrl+Shift+X`).
+- **`TableCheckboxList`** appears below once a source is picked. Lists the source database's tables (queried via `compare:list-tables`) as a multi-column checkbox grid with search filter and All / None buttons. Default = all selected.
+- **Run button**: disabled until both source and target are picked and they differ. `Ctrl+Enter` shortcut. Shows a `Loader2` spinner while running. On success, store gets `diff` + `script` and navigates to `/result`.
 
 ### 11.4 ResultPage (the marquee screen)
 
-```
-┌─ Header ─────────────────────────────────────────────────────────────┐
-│ dev (source) → prod (target)        [Diff] [Migration Script]  [↻]   │
-├─ TableTree ─────────┬─ Main panel ────────────────────────────────────┤
-│ 🔍 filter…         │ products                                          │
-│ Show: ☑ All        │ ── Columns ── Indexes ── FKs ── Checks ── Opts ──│
-│                    │                                                    │
-│ ➕ Added  (2)      │   prod (current)         │  dev (target)           │
-│  ├ audit_log       │ ─────────────────────────┼──────────────────────── │
-│  └ tag             │ id INT NOT NULL PK       │  id INT NOT NULL PK     │
-│                    │ sku VARCHAR(32) ░░░░░░░░ │░ sku VARCHAR(64) ░░░░░░ │ ← yellow
-│ ✏️ Modified  (5)    │ name VARCHAR(255)        │  name VARCHAR(255)      │
-│  ├ products  [3]   │ ░old_field VARCHAR(50)░ │                         │ ← red
-│  ├ users     [1]   │                          │░ created_at DATETIME ░ │ ← green
-│                    │ price DECIMAL(10,2)      │  price DECIMAL(10,2)    │
-│ ➖ Removed (1)      │                                                    │
-│  └ legacy_orders   │                                                    │
-│                    │                                                    │
-│ ⏸ Unchanged (47)   │                                                    │
-│  (collapsed)       │                                                    │
-└────────────────────┴────────────────────────────────────────────────────┘
-```
+Two top-level tabs in the header bar — **Schema** and **Data** — switch between the original schema diff layout and the data comparison view added in v1.1.0.
 
-**TableTree (left rail)**:
+**Schema tab — table tree + diff/script panel**:
 
-- Sticky filter input at top (matches table name).
-- Group toggles to show/hide Added / Modified / Removed / Unchanged.
-- Each row clickable; click loads that table's diff in the main panel.
-- Modified tables show a per-table change count badge (e.g. `[3]` = 3 changed columns/indexes/etc.).
-- Keyboard: ↑/↓ to navigate.
+- **Left: `TableTree.tsx`** — virtualized via `@tanstack/react-virtual` so 500+ table sidebars stay smooth. Search input bound to `Ctrl+P`. Grouped sections: Added / Modified / Removed / Unchanged with collapsible headers. Bottom button toggles to the Migration Script view.
+- **Right: `DiffPanel.tsx`** — per-table diff with section sub-tabs (Columns / Indexes / Foreign Keys / Check Constraints / Table Options), each bound to `Ctrl+1` … `Ctrl+5`. Modified rows show source vs target side-by-side with field-level highlights. Added / removed tables render a single-side full-structure view via the same component.
+- **Migration Script view — `ScriptPreview.tsx`** — toggled from the sidebar bottom button or `Ctrl+\``. Custom `SqlCode` highlighter (no CodeMirror — we use a hand-rolled tokenizer at `src/renderer/src/lib/sql-highlight.tsx`). Collapsible warnings panel with destructive count badge. Statement list rendered top-to-bottom, each with a "kind" badge and a `⚠ destructive` flag where applicable. Toolbar: **Save .sql** (`Ctrl+Shift+S`), **Copy** (`Ctrl+Shift+C`).
 
-**Main panel — Diff view**:
+**Data tab — `DataDiffView.tsx` + `DataTablePanel.tsx`**:
 
-- Sub-tabs: **Columns | Indexes | Foreign Keys | Check Constraints | Table Options**. Each tab shows a count badge if it has any changes.
-- Two-column layout, headers `<source-label> (current)` and `<target-label> (target)`. _Note on terminology_: in the data model, `source` = newer = the one we're matching to, `target` = older = the one receiving the migration. The UI uses friendlier wording.
-- Each row is a `DiffRow` rendering a one-line DDL fragment (column definition, etc.), color-coded.
-- Modified rows show both lines side by side; an `InlineHighlight` underlines the differing token (e.g. `VARCHAR(`**`32`**`)` vs `VARCHAR(`**`64`**`)`).
-- For Added / Removed rows the opposite side renders a placeholder of the same height (so vertical alignment is preserved).
-- Above the diff: a small badge strip showing kind of changes ("3 modified, 1 added, 1 removed"), and a "View raw DDL" toggle that shows the full `CREATE TABLE` for both sides.
+- **Left**: simple search-filtered table list (all tables from the diff: added + modified + removed + unchanged). No virtualization — data comparison is targeted at small tables.
+- **Right**: `DataTablePanel.tsx` for the selected table. Idle state shows the key column picker (PK auto-suggested), row limit input (default 10 000), and a "Skip key columns in INSERT" toggle. Loaded state shows clickable filter chips ("Show: +N added · −N removed · ~N modified") that toggle row-type visibility. Below: row diff table with key columns highlighted, modified rows showing strikethrough before-values + bold after-values. Bottom: collapsible **Data sync SQL** preview with a maximize button that opens it in a full-screen `role="dialog"` modal (Esc to close). Save / Copy buttons in the toolbar append `(filtered)` when any row-type is hidden.
 
-**Main panel — Migration Script tab**:
+### 11.5 ErdPage
 
-- Top: warnings panel (collapsible) listing `Warning` items, color-coded (info/warn/danger).
-- Center: CodeMirror 6 in read-only mode, SQL syntax. The full script. Destructive statements highlighted with a red gutter marker.
-- Right side: a "Statements" outline (collapsible) that mirrors the statement list — clicking a statement scrolls the editor to it. Each statement shows kind + table + destructive badge.
-- Footer: **Copy to clipboard**, **Save as .sql…** buttons.
+`/erd` route. Single-connection ERD viewer; details in §10B.
 
-### 11.5 Color tokens (Tailwind v4 `@theme`)
+- Top header: connection picker + Load button + database name and table count.
+- Left sidebar (240 px): per-table checkbox + name (click = jump to canvas) + branch icon (click = add table + FK neighbors).
+- Right canvas: `ErdCanvas.tsx` hosting React Flow with custom `TableNode`, dagre layout, hover-driven edge highlighting, PNG / SVG export buttons.
+
+### 11.6 Color tokens (Tailwind v4 `@theme`)
+
+The actual palette in `src/renderer/src/assets/main.css` is dark-only. Variables use `var(--color-*)` so any future light-mode addition is a single block flip.
 
 ```css
+/* abridged — see src/renderer/src/assets/main.css for the full set */
 @theme {
-  --color-diff-added: #16a34a; /* green-600 */
-  --color-diff-added-bg: #dcfce7; /* green-100 */
-  --color-diff-removed: #dc2626; /* red-600 */
-  --color-diff-removed-bg: #fee2e2; /* red-100 */
-  --color-diff-modified: #ca8a04; /* yellow-600 */
-  --color-diff-modified-bg: #fef9c3; /* yellow-100 */
-  --color-diff-modified-token: #f59e0b; /* underline color */
-  --color-diff-unchanged: #6b7280; /* gray-500 */
-  --color-destructive: #dc2626;
+  --color-background: hsl(0 0% 7%);
+  --color-foreground: hsl(0 0% 95%);
+  --color-card: hsl(0 0% 10%);
+  --color-muted: hsl(0 0% 14%);
+  --color-muted-foreground: hsl(0 0% 65%);
+  --color-accent: hsl(0 0% 18%);
+  --color-border: hsl(0 0% 18%);
+  --color-destructive: hsl(0 62% 50%);
+
+  --color-diff-added: hsl(142 71% 55%);
+  --color-diff-added-bg: hsl(142 71% 18%);
+  --color-diff-removed: hsl(0 72% 65%);
+  --color-diff-removed-bg: hsl(0 72% 22%);
+  --color-diff-modified: hsl(38 92% 60%);
+  --color-diff-modified-bg: hsl(48 70% 18%);
 }
 ```
 
-Dark mode variants follow the same names with `dark` prefix.
+The same file overrides Chromium scrollbars and React Flow Controls / MiniMap to match the dark palette.
 
 ### 11.6 Empty states
 
@@ -986,60 +987,65 @@ Dark mode variants follow the same names with `dark` prefix.
 
 ## 12. State management (Zustand)
 
-```ts
-// src/store/connections.slice.ts
-type ConnectionsSlice = {
-  connections: Connection[]
-  loading: boolean
-  load: () => Promise<void>
-  create: (draft: ConnectionDraft) => Promise<Connection>
-  update: (id: string, patch: Partial<ConnectionDraft>) => Promise<Connection>
-  remove: (id: string) => Promise<void>
-  test: (id: string) => Promise<{ ok: boolean; error?: string; serverVersion?: string }>
-}
+Single store at `src/renderer/src/store/index.ts`. The original proposal sketched a slices pattern but the implementation flattened to one `AppStore` type for simplicity — there's only ever one workflow active at a time, so cross-slice coupling never materialized.
 
-// src/store/comparison.slice.ts
-type ComparisonSlice = {
+```ts
+// src/renderer/src/store/index.ts (actual shape)
+
+type Status = 'idle' | 'loading' | 'success' | 'error'
+
+type AppStore = {
+  // Connections
+  connections: Connection[]
+  connectionsLoaded: boolean
+  loadConnections: () => Promise<void>
+  createConnection: (draft: ConnectionDraft) => Promise<void>
+  updateConnection: (id: string, patch: Partial<ConnectionDraft>) => Promise<void>
+  deleteConnection: (id: string) => Promise<void>
+  testConnection: (id: string) => Promise<ConnectionTestResult>
+
+  // Comparison
   sourceId: string | null
   targetId: string | null
-  availableTables: { source: string[]; target: string[] } | null
-  selectedTables: Set<string> // empty set = all
-  status: 'idle' | 'loading' | 'success' | 'error'
+  selectedTables: Set<string>     // empty = compare all
+  compareStatus: Status
   diff: SchemaDiff | null
   script: MigrationScript | null
-  error: string | null
-  setSource: (id: string | null) => void
-  setTarget: (id: string | null) => void
-  loadTables: () => Promise<void>
+  compareError: string | null
+  setSourceId: (id: string | null) => void
+  setTargetId: (id: string | null) => void
   toggleTable: (name: string) => void
-  run: () => Promise<void>
-  reset: () => void
-}
+  resetTables: () => void
+  runCompare: () => Promise<void>
 
-// src/store/ui.slice.ts
-type UiSlice = {
-  selectedTable: string | null // which table is selected in the diff tree
-  activeSection: 'columns' | 'indexes' | 'fks' | 'checks' | 'options'
-  showUnchanged: boolean
-  diffFilter: string // text filter for the tree
-  scriptTabVisible: boolean
+  // UI selection on the Result page
+  selectedTable: string | null
   setSelectedTable: (n: string | null) => void
-  setActiveSection: (s: UiSlice['activeSection']) => void
 }
 ```
 
-A single Zustand store combines all three slices via the slices pattern.
+ERD page state (`connectionId`, `schema`, `selectedTables`, `focus`) lives in local React state on `ErdPage`, not in the global store. ERD is independent of the comparison workflow, so global store entries would only add coupling.
+
+Local-only state lives in the relevant component:
+- `DataTablePanel` — `keyColumns`, `limit`, `skipKeyInInsert`, `loadState`, `filter`, `sqlOpen`, `sqlModalOpen`, `notice` (with timer ref)
+- `DataDiffView` — `selectedTable`, `tableSchema`, `tableSchemaLoading`
 
 ---
 
 ## 13. Connection storage and secrets
 
-- **Connection records** (everything except the password): saved to `<userData>/zaptar/connections.json` via lowdb.
-- **Passwords**: saved to OS keychain via `keytar.setPassword('zaptar', `connection:${id}`, password)`.
-- **On delete**: lowdb record removed _and_ `keytar.deletePassword('zaptar', `connection:${id}`)`.
-- **Migration on first launch**: if `<userData>/zaptar/` doesn't exist, create it. Initial `connections.json` is `{ connections: [] }`.
+The original proposal targeted `keytar`. Implementation switched to **Electron `safeStorage`** because it ships with Electron, has no native compilation step (no Visual Studio Build Tools requirement on Windows), and the keychain backend is already what Electron uses internally.
 
-The renderer **never** sees passwords. Test/compare operations send only the connection `id`; main resolves the password.
+### 13.1 Storage layout
+
+- **Connection records** including the encrypted password blob: saved to lowdb JSON at `app.getPath('userData')/connections.json`. The password is encrypted before being written.
+- **Encryption** (`src/main/secrets.ts`): `safeStorage.encryptString` returns an OS-protected ciphertext (DPAPI on Windows, Keychain on macOS, libsecret on Linux). Stored as base64 in the JSON file under `_encryptedPassword`.
+- **Decryption fallback**: if `safeStorage.isEncryptionAvailable()` is `false` (dev environment with no keyring like a fresh CI runner), passwords round-trip through plain base64. Logged but not fatal — keeps the app usable in containers.
+- **On delete**: lowdb record removed; the encrypted blob goes with it.
+
+### 13.2 Trust boundary
+
+The renderer **never** sees passwords. `Connection` records exposed to the renderer have `_encryptedPassword` stripped at the IPC boundary (the destructure `const { _encryptedPassword: _, ...conn } = stored` pattern in every handler that touches a connection). Test / compare / introspect operations send only the connection `id`; main resolves and decrypts the password before opening the mysql2 socket.
 
 ---
 
@@ -1098,11 +1104,13 @@ linux:
 
 ### 14.3 Native dependencies
 
-`keytar` is native. It must be **rebuilt for Electron** after `pnpm install`. `electron-builder install-app-deps` (run as a `postinstall` script) handles this. CI must have build tooling (Visual Studio Build Tools on Windows; Xcode CLT on macOS).
+The implementation switched from `keytar` (the original plan) to Electron `safeStorage` so there are now **no native modules** that need rebuilding. `electron-builder install-app-deps` runs as `postinstall` for any future native deps. mysql2 ships pure-JS by default. This means CI runners don't need Visual Studio Build Tools or Xcode CLT just to build a release.
 
 ---
 
 ## 15. Testing strategy
+
+> **Current reality (2026-05):** the production codebase relies on TypeScript strict-mode + manual smoke-testing + the round-trip Docker test described below, run on demand. The test pyramid sketched here is the target shape, not the current shape. Vitest is wired up via the `pnpm test` script but the test coverage today is intentionally minimal. New contributors can use this section as a guide for what to add when test coverage becomes a priority.
 
 ### 15.1 Unit (Vitest) — the must-have tier
 
